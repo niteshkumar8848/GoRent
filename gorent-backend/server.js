@@ -25,23 +25,41 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 /* ==============================
    CORS CONFIGURATION
 ================================= */
+// Allow CORS origins to be configured via environment variable
+// Separate multiple origins with commas
+// Example: ALLOWED_ORIGINS=http://localhost:3000,https://example.com
+const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || "";
+const allowedOriginsList = allowedOriginsEnv
+  ? allowedOriginsEnv.split(",").map(o => o.trim())
+  : [];
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    // In production, replace with your actual frontend domain
-    const allowedOrigins = [
-      "http://localhost:3000",
-      "http://localhost:5000",
-      "https://gorent-frontend.onrender.com", // Update with your Render frontend URL
-    ];
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    // Or in development mode without strict origin check
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // In development, allow all origins
+    if (NODE_ENV !== "production") {
+      return callback(null, true);
+    }
+
+    // Check if origin is in allowed list
+    // Also allow Render's preview URLs (ending with onrender.com)
+    const isAllowed = allowedOriginsList.includes(origin) || 
+                     origin.endsWith(".onrender.com") ||
+                     origin.includes("render.com");
     
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowed) {
       callback(null, true);
     } else {
+      console.log(`CORS blocked origin: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -76,17 +94,24 @@ app.locals.asyncHandler = asyncHandler;
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(MONGO_URI, {
-      maxPoolSize: 10, // Connection pool size
-      serverSelectionTimeoutMS: 5000, // Timeout for server selection
-      socketTimeoutMS: 45000, // Socket timeout
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
     console.error(`MongoDB Connection Error: ${error.message}`);
+    console.error("Please check:");
+    console.error("1. MongoDB Atlas IP whitelist includes your current IP");
+    console.error("2. MONGO_URI is correct in environment variables");
+    console.error("3. Database username and password are correct");
+    
     // Don't exit in development - allows for hot reload
     if (NODE_ENV === "production") {
-      process.exit(1);
+      // In production, try to reconnect but don't exit immediately
+      console.log("Attempting to reconnect in 5 seconds...");
+      setTimeout(connectDB, 5000);
     }
   }
 };
@@ -100,19 +125,35 @@ mongoose.connection.on("error", (err) => {
 
 mongoose.connection.on("disconnected", () => {
   console.warn("MongoDB Disconnected. Attempting to reconnect...");
+  if (NODE_ENV === "production") {
+    setTimeout(connectDB, 5000);
+  }
+});
+
+mongoose.connection.on("connected", () => {
+  console.log("MongoDB reconnected successfully");
 });
 
 /* ==============================
    HEALTH CHECK
 ================================= */
 app.get("/api/health", (req, res) => {
+  const mongoStatus = mongoose.connection.readyState;
+  const mongoStateMap = {
+    0: "disconnected",
+    1: "connected",
+    2: "connecting",
+    3: "disconnecting"
+  };
+  
   const healthcheck = {
-    status: "ok",
+    status: mongoStatus === 1 ? "ok" : "error",
     message: "GoRent API is running",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected"
+    mongodb: mongoStateMap[mongoStatus] || "unknown"
   };
+  
   try {
     res.json(healthcheck);
   } catch (error) {
@@ -144,6 +185,14 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(`❌ Error: ${err.message}`);
   console.error(err.stack);
+
+  // Handle CORS errors specifically
+  if (err.message === "Not allowed by CORS") {
+    return res.status(403).json({
+      success: false,
+      message: "CORS not allowed. Add your domain to ALLOWED_ORIGINS environment variable."
+    });
+  }
 
   // Handle specific error types
   if (err.name === "ValidationError") {
@@ -198,11 +247,9 @@ const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received. Starting graceful shutdown...`);
   
   try {
-    // Close MongoDB connection
     await mongoose.connection.close();
     console.log("MongoDB connection closed");
     
-    // Close Express server
     server.close(() => {
       console.log("HTTP server closed");
       process.exit(0);
@@ -245,6 +292,7 @@ const server = app.listen(PORT, () => {
 ║  PORT: ${PORT}
 ║  NODE_ENV: ${NODE_ENV}
 ║  MongoDB: ${mongoose.connection.readyState === 1 ? "Connected" : "Connecting..."}
+║  CORS: ${NODE_ENV === "production" ? "Restricted" : "Open (dev mode)"}
 ╚═══════════════════════════════════════════════════════════╝
   `);
 });

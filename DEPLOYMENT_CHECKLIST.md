@@ -7,10 +7,27 @@
 - [ ] JWT_SECRET is set (minimum 32 characters)
 - [ ] PORT is set to 10000 (or leave empty for Render)
 - [ ] NODE_ENV is set to "production"
+- [ ] ALLOWED_ORIGINS is set to your frontend URL (optional - .onrender.com is auto-allowed)
 
 ### Frontend (environment configuration)
 - [ ] REACT_APP_API_URL is set to your backend URL
   - Format: `https://your-backend-service.onrender.com/api`
+
+---
+
+## ⚠️ IMPORTANT: MongoDB Atlas IP Whitelist
+
+Before deploying, you MUST add Render's IP to MongoDB Atlas:
+
+### Steps:
+1. Go to [MongoDB Atlas](https://cloud.mongodb.com/)
+2. Select your project → Click "Network Access"
+3. Click "Add IP Address"
+4. **For testing (NOT production):** Select "Allow Access from Anywhere" (0.0.0.0/0)
+5. Click Confirm
+
+### Why this is needed:
+Render deploys your backend on dynamic IPs. MongoDB Atlas blocks connections from IPs not in the whitelist, causing the "Could not connect to any servers" error.
 
 ---
 
@@ -34,6 +51,7 @@ MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/gorent
 JWT_SECRET=your_generated_jwt_secret_key
 PORT=10000
 NODE_ENV=production
+ALLOWED_ORIGINS=https://your-frontend.onrender.com
 ```
 
 ### 3. Deploy
@@ -93,6 +111,15 @@ REACT_APP_API_URL=https://gorent-backend.onrender.com/api
 
 ## Common Issues & Solutions
 
+### Issue: MongoDB Connection Error
+```
+MongoDB Connection Error: Could not connect to any servers in your MongoDB Atlas cluster
+```
+**Solution:**
+1. Go to MongoDB Atlas → Network Access
+2. Add IP 0.0.0.0/0 (allow all IPs for testing)
+3. Wait 1-2 minutes for changes to apply
+
 ### Issue: 502 Bad Gateway
 **Solution:**
 1. Check backend logs in Render dashboard
@@ -102,8 +129,8 @@ REACT_APP_API_URL=https://gorent-backend.onrender.com/api
 
 ### Issue: CORS Errors
 **Solution:**
-1. The backend CORS is configured to allow specific origins
-2. Update `corsOptions.origin` in server.js to include your frontend URL
+1. The backend CORS is configured to allow `.onrender.com` domains automatically
+2. Add your frontend URL to ALLOWED_ORIGINS if needed
 3. Redeploy after changes
 
 ### Issue: Images Not Loading
@@ -113,7 +140,7 @@ REACT_APP_API_URL=https://gorent-backend.onrender.com/api
 
 ### Issue: Registration/Login Fails
 **Solution:**
-1. Check MongoDB Atlas network access (allow all IPs for testing)
+1. Verify MongoDB Atlas network access (allow all IPs for testing)
 2. Verify JWT_SECRET is set
 3. Check backend logs for errors
 
@@ -126,6 +153,7 @@ REACT_APP_API_URL=https://gorent-backend.onrender.com/api
 3. **Rate Limiting**: Consider adding express-rate-limit
 4. **MongoDB**: Use connection pooling and proper indexes
 5. **Environment**: Keep NODE_ENV=production
+6. **MongoDB IP**: Restrict to specific IPs after testing (not 0.0.0.0/0)
 
 ---
 
