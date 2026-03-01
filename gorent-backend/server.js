@@ -6,28 +6,15 @@ require("dotenv").config();
 const app = express();
 
 /* ==============================
-   CORS CONFIGURATION
+   CORS CONFIGURATION (FINAL FIX)
 ================================= */
 app.use(cors({
   origin: true,
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
 
 app.options("*", cors());
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
 
 app.use(express.json());
 
