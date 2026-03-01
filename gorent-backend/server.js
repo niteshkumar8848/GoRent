@@ -6,13 +6,14 @@ require("dotenv").config();
 const app = express();
 
 /* ==============================
-   CORS CONFIGURATION (PRODUCTION SAFE)
+   CORS CONFIGURATION
 ================================= */
-const allowedOrigins = [
-  "https://gorent-tq1k.onrender.com",  // your frontend URL
-  "http://localhost:3000"              // local development
-];
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 
+app.options("*", cors());
 app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps or curl)
