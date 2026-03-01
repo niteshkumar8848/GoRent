@@ -126,11 +126,24 @@ router.get("/me", auth, async (req, res) => {
 // Update user profile
 router.put("/me", auth, async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, currentPassword, newPassword } = req.body;
     
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    // If changing email or password, current password is required
+    if (email || newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ message: "Current password is required to update email or password" });
+      }
+
+      // Verify current password
+      const validPass = await bcrypt.compare(currentPassword, user.password);
+      if (!validPass) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
     }
 
     if (name) user.name = name;
@@ -146,13 +159,90 @@ router.put("/me", auth, async (req, res) => {
       user.email = email.toLowerCase();
     }
 
+    // Update password if provided
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
+      }
+      user.password = await bcrypt.hash(newPassword, 10);
+    }
+
     await user.save();
     
     res.json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role
+      message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Admin: Update own profile (email and/or password)
+router.put("/admin-profile", auth, async (req, res) => {
+  try {
+    // Only admins can use this endpoint
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const { email, currentPassword, newPassword } = req.body;
+    
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Admin user not found" });
+    }
+
+    // If changing email or password, current password is required
+    if (email || newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ message: "Current password is required to update email or password" });
+      }
+
+      // Verify current password
+      const validPass = await bcrypt.compare(currentPassword, user.password);
+      if (!validPass) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+    }
+
+    // Update email if provided
+    if (email && email.toLowerCase() !== user.email) {
+      // Check if email is already taken
+      const existingUser = await User.findOne({ 
+        email: email.toLowerCase(),
+        _id: { $ne: user._id }
+      });
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already in use" });
+      }
+      user.email = email.toLowerCase();
+    }
+
+    // Update password if provided
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
+      }
+      user.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    await user.save();
+    
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
   } catch (err) {
     console.error(err);

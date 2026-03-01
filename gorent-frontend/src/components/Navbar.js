@@ -3,12 +3,12 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const token = sessionStorage.getItem("token");
-  const user = JSON.parse(sessionStorage.getItem("user") || "null");
+  const token = localStorage.getItem("token");
+  const user = JSON.parse(localStorage.getItem("user") || "null");
 
   const handleLogout = () => {
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     navigate("/login");
   };
 
@@ -44,6 +44,15 @@ function Navbar() {
               className={`navbar-link ${isActive("/admin") ? "active" : ""}`}
             >
               Admin Dashboard
+            </Link>
+          )}
+          
+          {token && user?.role !== "admin" && (
+            <Link 
+              to="/dashboard" 
+              className={`navbar-link ${isActive("/dashboard") ? "active" : ""}`}
+            >
+              My Dashboard
             </Link>
           )}
           

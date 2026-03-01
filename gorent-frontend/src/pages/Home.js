@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { useToast } from "../components/Toast";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -23,6 +24,7 @@ function Home() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { addToast } = useToast();
   
   // Search and filter states
   const [search, setSearch] = useState("");
@@ -61,6 +63,13 @@ function Home() {
 
   useEffect(() => {
     fetchVehicles();
+    
+    // Poll for vehicle updates every 5 seconds to keep status current
+    const interval = setInterval(() => {
+      fetchVehicles();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Handle search
@@ -108,7 +117,7 @@ function Home() {
         }
       );
 
-      alert("Booking successful!");
+      addToast("Booking successful!", "success");
       setSelectedVehicle(null);
       navigate("/bookings");
     } catch (err) {

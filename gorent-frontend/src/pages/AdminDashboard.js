@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useToast } from "../components/Toast";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -22,6 +23,17 @@ function AdminDashboard() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { addToast } = useToast();
+  
+  // Admin profile state
+  const [adminProfile, setAdminProfile] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    email: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
   
   // Vehicle form state
   const [showVehicleForm, setShowVehicleForm] = useState(false);
@@ -49,11 +61,21 @@ function AdminDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      await Promise.all([fetchBookings(), fetchVehicles()]);
+      await Promise.all([fetchBookings(), fetchVehicles(), fetchAdminProfile()]);
     } catch (err) {
       setError("Failed to load data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAdminProfile = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/auth/me`, config);
+      setAdminProfile(res.data);
+      setProfileForm(prev => ({ ...prev, email: res.data.email || "" }));
+    } catch (err) {
+      console.error("Failed to fetch admin profile");
     }
   };
 
@@ -77,16 +99,25 @@ function AdminDashboard() {
 
   // Booking handlers
   const updateBookingStatus = async (bookingId, status) => {
+    // Optimistically update the UI first
+    const originalBookings = [...bookings];
+    const updatedBookings = bookings.map(b => 
+      b._id === bookingId ? { ...b, status: status } : b
+    );
+    setBookings(updatedBookings);
+    
     try {
       await axios.put(
         `${API_URL}/bookings/${bookingId}/status`,
         { status },
         config
       );
-      fetchBookings();
-      alert(`Booking ${status} successfully`);
+      // Success - no need to refetch
+      addToast(`Booking ${status} successfully`, "success");
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to update booking");
+      // Revert on error
+      setBookings(originalBookings);
+      addToast(err.response?.data?.message || "Failed to update booking", "error");
     }
   };
 
@@ -114,10 +145,10 @@ function AdminDashboard() {
           formData,
           config
         );
-        alert("Vehicle updated successfully");
+        addToast("Vehicle updated successfully", "success");
       } else {
         await axios.post(`${API_URL}/vehicles`, formData, config);
-        alert("Vehicle added successfully");
+        addToast("Vehicle added successfully", "success");
       }
       
       setShowVehicleForm(false);
@@ -128,7 +159,7 @@ function AdminDashboard() {
       setImagePreview("");
       fetchVehicles();
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to save vehicle");
+      addToast(err.response?.data?.message || "Failed to save vehicle", "error");
     } finally {
       setVehicleLoading(false);
     }
@@ -178,22 +209,82 @@ function AdminDashboard() {
     try {
       await axios.delete(`${API_URL}/vehicles/${vehicleId}`, config);
       fetchVehicles();
-      alert("Vehicle deleted successfully");
+      addToast("Vehicle deleted successfully", "success");
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to delete vehicle");
+      addToast(err.response?.data?.message || "Failed to delete vehicle", "error");
     }
   };
 
   const toggleVehicleAvailability = async (vehicle) => {
+    // Optimistically update the UI first for instant feedback
+    const originalAvailable = vehicle.available;
+    const updatedVehicles = vehicles.map(v => 
+      v._id === vehicle._id ? { ...v, available: !v.available } : v
+    );
+    setVehicles(updatedVehicles);
+    
     try {
       await axios.put(
         `${API_URL}/vehicles/${vehicle._id}`,
         { available: !vehicle.available },
         config
       );
-      fetchVehicles();
+      // No need to refetch, UI is already updated
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to update vehicle");
+      // Revert on error
+      setVehicles(vehicles.map(v => 
+        v._id === vehicle._id ? { ...v, available: originalAvailable } : v
+      ));
+      addToast(err.response?.data?.message || "Failed to update vehicle", "error");
+    }
+  };
+
+  // Admin profile handlers
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validate passwords match
+    if (profileForm.newPassword && profileForm.newPassword !== profileForm.confirmPassword) {
+      addToast("New passwords do not match", "error");
+      return;
+    }
+
+    // Check if there's anything to update
+    if (!profileForm.email && !profileForm.currentPassword && !profileForm.newPassword) {
+      addToast("No changes to update", "error");
+      return;
+    }
+
+    try {
+      setProfileLoading(true);
+      
+      const updateData = {
+        email: profileForm.email,
+        currentPassword: profileForm.currentPassword,
+        newPassword: profileForm.newPassword
+      };
+
+      const res = await axios.put(`${API_URL}/auth/admin-profile`, updateData, config);
+      
+      addToast(res.data.message || "Profile updated successfully", "success");
+      
+      // Clear password fields
+      setProfileForm(prev => ({
+        ...prev,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: ""
+      }));
+      
+      // Update localStorage with new user info
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      
+      // Refresh admin profile
+      fetchAdminProfile();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update profile", "error");
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -250,6 +341,12 @@ function AdminDashboard() {
             onClick={() => setActiveTab("vehicles")}
           >
             Vehicles ({vehicles.length})
+          </button>
+          <button
+            className={`admin-tab ${activeTab === "settings" ? "active" : ""}`}
+            onClick={() => setActiveTab("settings")}
+          >
+            Settings
           </button>
         </div>
 
@@ -400,6 +497,87 @@ function AdminDashboard() {
                 <p>Add your first vehicle to start renting</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === "settings" && (
+          <div>
+            <div className="settings-container">
+              <h2>Admin Profile Settings</h2>
+              <p className="settings-subtitle">Update your email or password</p>
+              
+              <div className="settings-card">
+                <div className="settings-info">
+                  <div className="info-row">
+                    <span className="info-label">Name:</span>
+                    <span className="info-value">{adminProfile?.name || "Admin"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Role:</span>
+                    <span className="info-value">{adminProfile?.role || "admin"}</span>
+                  </div>
+                </div>
+                
+                <form onSubmit={handleProfileSubmit} className="settings-form">
+                  <h3>Update Credentials</h3>
+                  
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="Enter new email"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label className="form-label">Current Password</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      placeholder="Enter current password (required for changes)"
+                      value={profileForm.currentPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
+                    />
+                    <small className="form-hint">Required to change email or password</small>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label className="form-label">New Password</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      placeholder="Enter new password"
+                      value={profileForm.newPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
+                    />
+                    <small className="form-hint">Minimum 6 characters</small>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label className="form-label">Confirm New Password</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      placeholder="Confirm new password"
+                      value={profileForm.confirmPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                    />
+                  </div>
+                  
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={profileLoading}
+                  >
+                    {profileLoading ? "Updating..." : "Update Profile"}
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         )}
 

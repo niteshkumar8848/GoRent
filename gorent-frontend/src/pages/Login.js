@@ -26,9 +26,9 @@ function Login() {
       
       const res = await axios.post(`${API_URL}/auth/login`, { email, password });
       
-      // Store token and user info in sessionStorage (isolated per tab)
-      sessionStorage.setItem("token", res.data.token);
-      sessionStorage.setItem("user", JSON.stringify(res.data.user));
+      // Store token and user info in localStorage (shared across tabs)
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
       
       // Redirect based on role
       if (res.data.user.role === "admin") {

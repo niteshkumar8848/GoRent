@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useToast } from "../components/Toast";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -21,9 +22,17 @@ function Bookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     fetchBookings();
+    
+    // Poll for booking updates every 5 seconds
+    const interval = setInterval(() => {
+      fetchBookings();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchBookings = async () => {
@@ -62,9 +71,9 @@ function Bookings() {
       
       // Refresh bookings
       fetchBookings();
-      alert("Booking cancelled successfully");
+      addToast("Booking cancelled successfully", "success");
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to cancel booking");
+      addToast(err.response?.data?.message || "Failed to cancel booking", "error");
     } finally {
       setCancelling(null);
     }
