@@ -23,7 +23,7 @@ if (!JWT_SECRET) {
 }
 
 /* ==============================
-   CORS CONFIGURATION - Allow All for Development
+   CORS CONFIGURATION
 ================================= */
 const corsOptions = {
   origin: function (origin, callback) {
@@ -61,18 +61,12 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/uploads", express.static("uploads"));
 
 /* ==============================
-   DATABASE CONNECTION - With Auto-Reconnect
+   DATABASE CONNECTION
 ================================= */
 let isConnected = false;
 
-// User Model (defined locally to avoid import issues)
-const userSchema = new mongoose.Schema({
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
-  role: { type: String, default: "user" }
-});
-const User = mongoose.models.User || mongoose.model("User", userSchema);
+// Import User model from existing file
+const User = require("./models/User");
 
 const connectDB = async (retries = 5, delay = 5000) => {
   if (!MONGO_URI) {
@@ -154,7 +148,7 @@ mongoose.connection.on("disconnected", () => {
 });
 
 /* ==============================
-   HEALTH CHECK - Works Even Without MongoDB
+   HEALTH CHECK
 ================================= */
 app.get("/api/health", (req, res) => {
   const healthStatus = {
