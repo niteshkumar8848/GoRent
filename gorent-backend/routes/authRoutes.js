@@ -4,6 +4,9 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const auth = require("../middleware/authMiddleware");
 
+// Check if JWT_SECRET is available
+const JWT_SECRET = process.env.JWT_SECRET;
+
 // Register a new user
 router.post("/register", async (req, res) => {
   try {
@@ -11,24 +14,44 @@ router.post("/register", async (req, res) => {
 
     // Validate required fields
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Please provide all required fields" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide all required fields" 
+      });
+    }
+
+    // Validate name length
+    if (name.trim().length < 2) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Name must be at least 2 characters" 
+      });
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Please provide a valid email" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide a valid email" 
+      });
     }
 
     // Validate password length
     if (password.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Password must be at least 6 characters" 
+      });
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists with this email" });
+      return res.status(400).json({ 
+        success: false,
+        message: "User already exists with this email" 
+      });
     }
 
     // Hash password
@@ -36,8 +59,8 @@ router.post("/register", async (req, res) => {
 
     // Create user
     const user = new User({ 
-      name, 
-      email: email.toLowerCase(), 
+      name: name.trim(), 
+      email: email.toLowerCase().trim(), 
       password: hashedPassword 
     });
 
@@ -46,11 +69,13 @@ router.post("/register", async (req, res) => {
     // Generate token
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 
     res.status(201).json({
+      success: true,
+      message: "Registration successful",
       token,
       user: {
         id: user._id,
@@ -60,8 +85,29 @@ router.post("/register", async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Registration error:", err);
+    
+    // Handle mongoose validation errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    
+    // Handle duplicate key error
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "User already exists"
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: "Server error during registration" 
+    });
   }
 });
 
@@ -72,29 +118,40 @@ router.post("/login", async (req, res) => {
 
     // Validate required fields
     if (!email || !password) {
-      return res.status(400).json({ message: "Please provide email and password" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide email and password" 
+      });
     }
 
     // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid credentials" 
+      });
     }
 
     // Check password
     const validPass = await bcrypt.compare(password, user.password);
     if (!validPass) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid credentials" 
+      });
     }
 
     // Generate token
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 
     res.json({
+      success: true,
+      message: "Login successful",
       token,
       user: {
         id: user._id,
@@ -104,22 +161,34 @@ router.post("/login", async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Login error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error during login" 
+    });
   }
 });
 
 // Get current user profile
 router.get("/me", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user.id).select("-password").lean();
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
     }
-    res.json(user);
+    res.json({
+      success: true,
+      data: user
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Get profile error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while fetching profile" 
+    });
   }
 });
 
@@ -130,39 +199,72 @@ router.put("/me", auth, async (req, res) => {
     
     const user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
     }
 
     // If changing email or password, current password is required
     if (email || newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ message: "Current password is required to update email or password" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Current password is required to update email or password" 
+        });
       }
 
       // Verify current password
       const validPass = await bcrypt.compare(currentPassword, user.password);
       if (!validPass) {
-        return res.status(400).json({ message: "Current password is incorrect" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Current password is incorrect" 
+        });
       }
     }
 
-    if (name) user.name = name;
+    if (name) {
+      if (name.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Name must be at least 2 characters"
+        });
+      }
+      user.name = name.trim();
+    }
+    
     if (email) {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Please provide a valid email" 
+        });
+      }
+      
       // Check if email is already taken by another user
       const existingUser = await User.findOne({ 
-        email: email.toLowerCase(),
+        email: email.toLowerCase().trim(),
         _id: { $ne: user._id }
       });
       if (existingUser) {
-        return res.status(400).json({ message: "Email already in use" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Email already in use" 
+        });
       }
-      user.email = email.toLowerCase();
+      user.email = email.toLowerCase().trim();
     }
 
     // Update password if provided
     if (newPassword) {
       if (newPassword.length < 6) {
-        return res.status(400).json({ message: "New password must be at least 6 characters" });
+        return res.status(400).json({ 
+          success: false,
+          message: "New password must be at least 6 characters" 
+        });
       }
       user.password = await bcrypt.hash(newPassword, 10);
     }
@@ -170,6 +272,7 @@ router.put("/me", auth, async (req, res) => {
     await user.save();
     
     res.json({
+      success: true,
       message: "Profile updated successfully",
       user: {
         id: user._id,
@@ -179,8 +282,21 @@ router.put("/me", auth, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Update profile error:", err);
+    
+    // Handle mongoose validation errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while updating profile" 
+    });
   }
 });
 
@@ -189,31 +305,46 @@ router.put("/admin-profile", auth, async (req, res) => {
   try {
     // Only admins can use this endpoint
     if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied. Admin only." });
+      return res.status(403).json({ 
+        success: false,
+        message: "Access denied. Admin only." 
+      });
     }
 
     const { name, email, currentPassword, newPassword } = req.body;
     
     const user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({ message: "Admin user not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Admin user not found" 
+      });
     }
 
     // If changing name, validate it
     if (name && name.trim().length < 2) {
-      return res.status(400).json({ message: "Name must be at least 2 characters" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Name must be at least 2 characters" 
+      });
     }
 
     // If changing email or password, current password is required
     if (email || newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ message: "Current password is required to update email or password" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Current password is required to update email or password" 
+        });
       }
 
       // Verify current password
       const validPass = await bcrypt.compare(currentPassword, user.password);
       if (!validPass) {
-        return res.status(400).json({ message: "Current password is incorrect" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Current password is incorrect" 
+        });
       }
     }
 
@@ -223,22 +354,37 @@ router.put("/admin-profile", auth, async (req, res) => {
     }
 
     // Update email if provided
-    if (email && email.toLowerCase() !== user.email) {
+    if (email && email.toLowerCase().trim() !== user.email) {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Please provide a valid email" 
+        });
+      }
+      
       // Check if email is already taken
       const existingUser = await User.findOne({ 
-        email: email.toLowerCase(),
+        email: email.toLowerCase().trim(),
         _id: { $ne: user._id }
       });
       if (existingUser) {
-        return res.status(400).json({ message: "Email already in use" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Email already in use" 
+        });
       }
-      user.email = email.toLowerCase();
+      user.email = email.toLowerCase().trim();
     }
 
     // Update password if provided
     if (newPassword) {
       if (newPassword.length < 6) {
-        return res.status(400).json({ message: "New password must be at least 6 characters" });
+        return res.status(400).json({ 
+          success: false,
+          message: "New password must be at least 6 characters" 
+        });
       }
       user.password = await bcrypt.hash(newPassword, 10);
     }
@@ -246,6 +392,7 @@ router.put("/admin-profile", auth, async (req, res) => {
     await user.save();
     
     res.json({
+      success: true,
       message: "Profile updated successfully",
       user: {
         id: user._id,
@@ -255,8 +402,21 @@ router.put("/admin-profile", auth, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Admin profile update error:", err);
+    
+    // Handle mongoose validation errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while updating profile" 
+    });
   }
 });
 

@@ -5,6 +5,9 @@ import { useConfirmDialog } from "../components/ConfirmDialog";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+// Get the base URL (without /api)
+const BASE_URL = API_URL.replace("/api", "");
+
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
@@ -12,10 +15,10 @@ const getImageUrl = (imagePath) => {
   if (imagePath.startsWith("http")) return imagePath;
   // If it's a local path starting with /uploads, prepend the server base URL
   if (imagePath.startsWith("/uploads")) {
-    return "http://localhost:5000" + imagePath;
+    return BASE_URL + imagePath;
   }
-  // Fallback: prepend API base URL
-  return API_URL.replace("/api", "") + imagePath;
+  // Fallback: prepend BASE_URL
+  return BASE_URL + imagePath;
 };
 
 function AdminDashboard() {
@@ -54,7 +57,8 @@ function AdminDashboard() {
 
   const token = localStorage.getItem("token");
   const config = {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10000 // 10 second timeout
   };
 
   useEffect(() => {
@@ -62,11 +66,14 @@ function AdminDashboard() {
     fetchData(true);
     
     // Poll for updates every 5 seconds WITHOUT loading indicator
-    const interval = setInterval(() => {
-      fetchData(false);
-    }, 5000);
-    
-    return () => clearInterval(interval);
+    // Only in development - remove in production for better performance
+    if (process.env.NODE_ENV !== "production") {
+      const interval = setInterval(() => {
+        fetchData(false);
+      }, 5000);
+      
+      return () => clearInterval(interval);
+    }
   }, []);
 
   const fetchData = async (showLoading = true) => {
@@ -89,18 +96,23 @@ function AdminDashboard() {
   const fetchAdminProfile = async (showLoading = true) => {
     try {
       const res = await axios.get(`${API_URL}/auth/me`, config);
+      
+      // Handle both old and new response formats
+      const userData = res.data.data || res.data;
+      
       setAdminProfile(prev => {
         // Only update if data changed
-        if (JSON.stringify(prev) !== JSON.stringify(res.data)) {
-          return res.data;
+        if (JSON.stringify(prev) !== JSON.stringify(userData)) {
+          return userData;
         }
         return prev;
       });
+      
       if (showLoading || !adminProfile) {
         setProfileForm(prev => ({ 
           ...prev, 
-          name: res.data.name || "",
-          email: res.data.email || "" 
+          name: userData.name || "",
+          email: userData.email || "" 
         }));
       }
     } catch (err) {
@@ -111,10 +123,19 @@ function AdminDashboard() {
   const fetchBookings = async (showLoading = true) => {
     try {
       const res = await axios.get(`${API_URL}/bookings/all`, config);
+      
+      // Handle both old format (array) and new format ({success, data})
+      let bookingData = [];
+      if (Array.isArray(res.data)) {
+        bookingData = res.data;
+      } else if (res.data && res.data.data) {
+        bookingData = res.data.data;
+      }
+      
       setBookings(prev => {
         // Only update if data changed
-        if (JSON.stringify(prev) !== JSON.stringify(res.data)) {
-          return res.data;
+        if (JSON.stringify(prev) !== JSON.stringify(bookingData)) {
+          return bookingData;
         }
         return prev;
       });
@@ -126,10 +147,19 @@ function AdminDashboard() {
   const fetchVehicles = async (showLoading = true) => {
     try {
       const res = await axios.get(`${API_URL}/vehicles`);
+      
+      // Handle both old format (array) and new format ({success, data})
+      let vehicleData = [];
+      if (Array.isArray(res.data)) {
+        vehicleData = res.data;
+      } else if (res.data && res.data.data) {
+        vehicleData = res.data.data;
+      }
+      
       setVehicles(prev => {
         // Only update if data changed
-        if (JSON.stringify(prev) !== JSON.stringify(res.data)) {
-          return res.data;
+        if (JSON.stringify(prev) !== JSON.stringify(vehicleData)) {
+          return vehicleData;
         }
         return prev;
       });
@@ -148,13 +178,13 @@ function AdminDashboard() {
     setBookings(updatedBookings);
     
     try {
-      await axios.put(
+      const res = await axios.put(
         `${API_URL}/bookings/${bookingId}/status`,
         { status },
         config
       );
-      // Success - no need to refetch
-      addToast(`Booking ${status} successfully`, "success");
+      // Success
+      addToast(res.data?.message || `Booking ${status} successfully`, "success");
     } catch (err) {
       // Revert on error
       setBookings(originalBookings);
@@ -200,7 +230,7 @@ function AdminDashboard() {
       setImagePreview("");
       fetchVehicles();
     } catch (err) {
-      addToast(err.response?.data?.message || "Failed to save vehicle", "error");
+      addToast(err.response?.data?.message || err.response?.data?.error || "Failed to save vehicle", "error");
     } finally {
       setVehicleLoading(false);
     }
@@ -249,7 +279,7 @@ function AdminDashboard() {
         fetchVehicles();
         addToast("Vehicle deleted successfully", "success");
       } catch (err) {
-        addToast(err.response?.data?.message || "Failed to delete vehicle", "error");
+        addToast(err.response?.data?.message || err.response?.data?.error || "Failed to delete vehicle", "error");
       }
     });
   };
@@ -306,7 +336,7 @@ function AdminDashboard() {
 
       const res = await axios.put(`${API_URL}/auth/admin-profile`, updateData, config);
       
-      addToast(res.data.message || "Profile updated successfully", "success");
+      addToast(res.data?.message || "Profile updated successfully", "success");
       
       // Clear password fields
       setProfileForm(prev => ({
@@ -317,12 +347,14 @@ function AdminDashboard() {
       }));
       
       // Update localStorage with new user info
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      if (res.data.user) {
+        localStorage.setItem("user", JSON.stringify(res.data.user));
+      }
       
       // Refresh admin profile
       fetchAdminProfile();
     } catch (err) {
-      addToast(err.response?.data?.message || "Failed to update profile", "error");
+      addToast(err.response?.data?.message || err.response?.data?.error || "Failed to update profile", "error");
     } finally {
       setProfileLoading(false);
     }
@@ -339,6 +371,7 @@ function AdminDashboard() {
   };
 
   const formatDate = (date) => {
+    if (!date) return "N/A";
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
@@ -492,6 +525,9 @@ function AdminDashboard() {
                       src={getImageUrl(vehicle.image) || "https://via.placeholder.com/300x200?text=No+Image"}
                       alt={vehicle.name}
                       className="vehicle-image"
+                      onError={(e) => {
+                        e.target.src = "https://via.placeholder.com/300x200?text=No+Image";
+                      }}
                     />
                     <div className="vehicle-content">
                       <div className="d-flex justify-between align-center">
@@ -703,6 +739,9 @@ function AdminDashboard() {
                           src={imagePreview} 
                           alt="Preview" 
                           style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "8px" }}
+                          onError={(e) => {
+                            e.target.src = "https://via.placeholder.com/300x200?text=No+Image";
+                          }}
                         />
                       </div>
                     )}

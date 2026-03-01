@@ -22,7 +22,8 @@ function UserDashboard() {
 
   const token = localStorage.getItem("token");
   const config = {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10000 // 10 second timeout
   };
 
   useEffect(() => {
@@ -33,14 +34,18 @@ function UserDashboard() {
     try {
       setLoading(true);
       const res = await axios.get(`${API_URL}/auth/me`, config);
-      setUser(res.data);
+      
+      // Handle both old and new response formats
+      const userData = res.data.data || res.data;
+      setUser(userData);
       setProfileForm(prev => ({
         ...prev,
-        name: res.data.name || "",
-        email: res.data.email || ""
+        name: userData.name || "",
+        email: userData.email || ""
       }));
     } catch (err) {
-      addToast("Failed to load profile", "error");
+      console.error("Error fetching profile:", err);
+      addToast(err.response?.data?.message || "Failed to load profile", "error");
     } finally {
       setLoading(false);
     }
@@ -73,7 +78,7 @@ function UserDashboard() {
 
       const res = await axios.put(`${API_URL}/auth/me`, updateData, config);
       
-      addToast(res.data.message || "Profile updated successfully", "success");
+      addToast(res.data?.message || "Profile updated successfully", "success");
       
       // Clear password fields
       setProfileForm(prev => ({
@@ -84,12 +89,15 @@ function UserDashboard() {
       }));
       
       // Update localStorage with new user info
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      if (res.data.user) {
+        localStorage.setItem("user", JSON.stringify(res.data.user));
+      }
       
       // Refresh user profile
       fetchUserProfile();
     } catch (err) {
-      addToast(err.response?.data?.message || "Failed to update profile", "error");
+      console.error("Error updating profile:", err);
+      addToast(err.response?.data?.message || err.response?.data?.error || "Failed to update profile", "error");
     } finally {
       setProfileLoading(false);
     }

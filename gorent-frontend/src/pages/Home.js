@@ -7,17 +7,23 @@ import { useToast } from "../components/Toast";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+// Get the base URL (without /api)
+const BASE_URL = API_URL.replace("/api", "");
+
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
+  
   // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
   if (imagePath.startsWith("http")) return imagePath;
+  
   // If it's a local path starting with /uploads, prepend the server base URL
   if (imagePath.startsWith("/uploads")) {
-    return "http://localhost:5000" + imagePath;
+    return BASE_URL + imagePath;
   }
-  // Fallback: prepend API base URL
-  return API_URL.replace("/api", "") + imagePath;
+  
+  // Fallback: prepend BASE_URL
+  return BASE_URL + imagePath;
 };
 
 function Home() {
@@ -52,21 +58,35 @@ function Home() {
       if (maxPrice) params.append("maxPrice", maxPrice);
       if (brand) params.append("brand", brand);
 
-      const res = await axios.get(`${API_URL}/vehicles?${params}`);
+      const res = await axios.get(`${API_URL}/vehicles?${params}`, {
+        timeout: 10000 // 10 second timeout
+      });
+      
+      // Handle both old format (array) and new format ({success, data})
+      let vehicleData = [];
+      if (Array.isArray(res.data)) {
+        // Old format - direct array
+        vehicleData = res.data;
+      } else if (res.data && res.data.data) {
+        // New format - {success, data, count}
+        vehicleData = res.data.data;
+      } else if (res.data && Array.isArray(res.data.vehicles)) {
+        // Alternative format - {vehicles: []}
+        vehicleData = res.data.vehicles;
+      }
       
       // Only update state if data has changed (for smooth updates)
       setVehicles(prevVehicles => {
-        const newVehicles = res.data;
         // Compare and only update if there are actual changes
-        if (JSON.stringify(prevVehicles) !== JSON.stringify(newVehicles)) {
-          return newVehicles;
+        if (JSON.stringify(prevVehicles) !== JSON.stringify(vehicleData)) {
+          return vehicleData;
         }
         return prevVehicles;
       });
       setError("");
     } catch (err) {
-      setError("Failed to load vehicles");
-      console.error(err);
+      console.error("Error fetching vehicles:", err);
+      setError(err.response?.data?.message || "Failed to load vehicles");
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -79,11 +99,14 @@ function Home() {
     fetchVehicles(true);
     
     // Poll for vehicle updates every 5 seconds WITHOUT loading indicator
-    const interval = setInterval(() => {
-      fetchVehicles(false);
-    }, 5000);
-    
-    return () => clearInterval(interval);
+    // Only in development - remove in production for better performance
+    if (process.env.NODE_ENV !== "production") {
+      const interval = setInterval(() => {
+        fetchVehicles(false);
+      }, 5000);
+      
+      return () => clearInterval(interval);
+    }
   }, []);
 
   // Handle search
@@ -119,7 +142,7 @@ function Home() {
       setBookingLoading(true);
       setBookingError("");
       
-      await axios.post(
+      const res = await axios.post(
         `${API_URL}/bookings`,
         {
           vehicleId: selectedVehicle._id,
@@ -131,18 +154,19 @@ function Home() {
         }
       );
 
-      addToast("Booking successful!", "success");
+      addToast(res.data?.message || "Booking successful!", "success");
       setSelectedVehicle(null);
       navigate("/bookings");
     } catch (err) {
-      setBookingError(err.response?.data?.message || "Failed to create booking");
+      console.error("Booking error:", err);
+      setBookingError(err.response?.data?.message || err.response?.data?.error || "Failed to create booking");
     } finally {
       setBookingLoading(false);
     }
   };
 
   // Get unique brands for filter
-  const brands = [...new Set(vehicles.map(v => v.brand))];
+  const brands = [...new Set(vehicles.map(v => v.brand).filter(Boolean))];
 
   return (
     <div className="page">
@@ -207,6 +231,9 @@ function Home() {
                       src={getImageUrl(vehicle.image) || "https://via.placeholder.com/300x200?text=No+Image"}
                       alt={vehicle.name}
                       className="vehicle-image"
+                      onError={(e) => {
+                        e.target.src = "https://via.placeholder.com/300x200?text=No+Image";
+                      }}
                     />
                     <div className="vehicle-content">
                       <h3 className="vehicle-name">{vehicle.name}</h3>

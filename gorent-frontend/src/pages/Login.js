@@ -24,20 +24,51 @@ function Login() {
       setLoading(true);
       setError("");
       
-      const res = await axios.post(`${API_URL}/auth/login`, { email, password });
+      const res = await axios.post(`${API_URL}/auth/login`, { 
+        email, 
+        password 
+      }, {
+        timeout: 10000 // 10 second timeout
+      });
+      
+      // Handle both old and new response formats
+      const responseData = res.data;
+      
+      // Check for success in both formats
+      if (responseData.success === false) {
+        setError(responseData.message || "Login failed");
+        return;
+      }
+      
+      // Get token and user from response
+      const token = responseData.token;
+      const user = responseData.user;
+      
+      if (!token) {
+        setError("Invalid response from server");
+        return;
+      }
       
       // Store token and user info in localStorage (shared across tabs)
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
       
       // Redirect based on role
-      if (res.data.user.role === "admin") {
+      if (user.role === "admin") {
         navigate("/admin");
       } else {
         navigate("/");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Please try again.");
+      console.error("Login error:", err);
+      // Handle error response
+      if (err.response) {
+        setError(err.response.data?.message || err.response.data?.error || "Login failed. Please try again.");
+      } else if (err.request) {
+        setError("Server is not responding. Please try again later.");
+      } else {
+        setError("Login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

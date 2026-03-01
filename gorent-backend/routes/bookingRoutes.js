@@ -11,26 +11,62 @@ router.post("/", auth, async (req, res) => {
     
     // Validate required fields
     if (!vehicleId || !startDate || !endDate) {
-      return res.status(400).json({ message: "Please provide all required fields" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide all required fields (vehicleId, startDate, endDate)" 
+      });
+    }
+
+    // Validate vehicleId format
+    if (!vehicleId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
     }
 
     // Check if vehicle exists and is available
     const vehicle = await Vehicle.findById(vehicleId);
     if (!vehicle) {
-      return res.status(404).json({ message: "Vehicle not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Vehicle not found" 
+      });
     }
 
     if (!vehicle.available) {
-      return res.status(400).json({ message: "Vehicle is not available" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Vehicle is not available for booking" 
+      });
     }
 
     // Calculate total price
     const start = new Date(startDate);
     const end = new Date(endDate);
+    
+    // Validate dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    
+    if (start < new Date().setHours(0, 0, 0, 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date cannot be in the past"
+      });
+    }
+    
     const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
     
     if (days <= 0) {
-      return res.status(400).json({ message: "End date must be after start date" });
+      return res.status(400).json({ 
+        success: false,
+        message: "End date must be after start date" 
+      });
     }
 
     const totalPrice = days * vehicle.pricePerDay;
@@ -43,16 +79,41 @@ router.post("/", auth, async (req, res) => {
       totalPrice
     });
 
-    await booking.save();
+    const savedBooking = await booking.save();
     
     // Populate vehicle and user details before sending response
-    await booking.populate("vehicle");
-    await booking.populate("user", "name email");
+    await savedBooking.populate("vehicle");
+    await savedBooking.populate("user", "name email");
     
-    res.status(201).json(booking);
+    res.status(201).json({
+      success: true,
+      message: "Booking created successfully",
+      data: savedBooking
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Create booking error:", err);
+    
+    // Handle mongoose validation errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    
+    // Handle CastError (invalid ObjectId)
+    if (err.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ID format"
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while creating booking" 
+    });
   }
 });
 
@@ -61,11 +122,20 @@ router.get("/", auth, async (req, res) => {
   try {
     const bookings = await Booking.find({ user: req.user.id })
       .populate("vehicle")
-      .sort({ createdAt: -1 });
-    res.json(bookings);
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    res.json({
+      success: true,
+      count: bookings.length,
+      data: bookings
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Get bookings error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while fetching bookings" 
+    });
   }
 });
 
@@ -75,88 +145,173 @@ router.get("/all", auth, admin, async (req, res) => {
     const bookings = await Booking.find()
       .populate("vehicle")
       .populate("user", "name email")
-      .sort({ createdAt: -1 });
-    res.json(bookings);
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    res.json({
+      success: true,
+      count: bookings.length,
+      data: bookings
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Get all bookings error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while fetching all bookings" 
+    });
   }
 });
 
 // Update booking status (Admin only)
 router.put("/:id/status", auth, admin, async (req, res) => {
   try {
+    const { id } = req.params;
     const { status } = req.body;
     
+    // Validate ID format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format"
+      });
+    }
+    
     const validStatuses = ["pending", "confirmed", "completed", "cancelled"];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}` 
+      });
     }
 
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(id);
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Booking not found" 
+      });
     }
 
     booking.status = status;
-    await booking.save();
+    const updatedBooking = await booking.save();
     
-    await booking.populate("vehicle");
-    await booking.populate("user", "name email");
+    await updatedBooking.populate("vehicle");
+    await updatedBooking.populate("user", "name email");
     
-    res.json(booking);
+    res.json({
+      success: true,
+      message: "Booking status updated successfully",
+      data: updatedBooking
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Update booking status error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while updating booking status" 
+    });
   }
 });
 
 // Cancel booking (User can cancel their own booking)
 router.put("/:id/cancel", auth, async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const { id } = req.params;
+    
+    // Validate ID format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format"
+      });
+    }
+    
+    const booking = await Booking.findById(id);
     
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Booking not found" 
+      });
     }
 
     // Check if user owns this booking or is admin
     if (booking.user.toString() !== req.user.id && req.user.role !== "admin") {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.status(403).json({ 
+        success: false,
+        message: "Not authorized to cancel this booking" 
+      });
     }
 
     // Can't cancel completed bookings
     if (booking.status === "completed") {
-      return res.status(400).json({ message: "Cannot cancel completed booking" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Cannot cancel completed booking" 
+      });
+    }
+
+    // Can't cancel already cancelled bookings
+    if (booking.status === "cancelled") {
+      return res.status(400).json({ 
+        success: false,
+        message: "Booking is already cancelled" 
+      });
     }
 
     booking.status = "cancelled";
-    await booking.save();
+    const updatedBooking = await booking.save();
     
-    await booking.populate("vehicle");
-    await booking.populate("user", "name email");
+    await updatedBooking.populate("vehicle");
+    await updatedBooking.populate("user", "name email");
     
-    res.json(booking);
+    res.json({
+      success: true,
+      message: "Booking cancelled successfully",
+      data: updatedBooking
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Cancel booking error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while cancelling booking" 
+    });
   }
 });
 
 // Delete booking (Admin only)
 router.delete("/:id", auth, admin, async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const { id } = req.params;
+    
+    // Validate ID format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format"
+      });
+    }
+    
+    const booking = await Booking.findById(id);
     
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Booking not found" 
+      });
     }
 
     await booking.deleteOne();
-    res.json({ message: "Booking deleted successfully" });
+    
+    res.json({ 
+      success: true,
+      message: "Booking deleted successfully" 
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Delete booking error:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while deleting booking" 
+    });
   }
 });
 

@@ -41,8 +41,33 @@ const upload = multer({
   }
 });
 
+// Multer error handler middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: `File upload error: ${err.message}`
+    });
+  }
+  
+  if (err) {
+    return res.status(400).json({
+      success: false,
+      message: err.message
+    });
+  }
+  
+  next();
+};
+
 // Get all vehicles with search and filter
-router.get("/", async (req, res) => {
+router.get("/", async (req, res, next) => {
   try {
     const { search, maxPrice, brand } = req.query;
     let query = {};
@@ -55,7 +80,10 @@ router.get("/", async (req, res) => {
     }
 
     if (maxPrice) {
-      query.pricePerDay = { $lte: parseInt(maxPrice) };
+      const price = parseInt(maxPrice);
+      if (!isNaN(price)) {
+        query.pricePerDay = { $lte: price };
+      }
     }
 
     if (brand) {
@@ -64,36 +92,76 @@ router.get("/", async (req, res) => {
 
     query.available = true;
 
-    const vehicles = await Vehicle.find(query);
-    res.json(vehicles);
+    const vehicles = await Vehicle.find(query).lean();
+    
+    res.json({
+      success: true,
+      count: vehicles.length,
+      data: vehicles
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error fetching vehicles:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while fetching vehicles" 
+    });
   }
 });
 
 // Get single vehicle
-router.get("/:id", async (req, res) => {
+router.get("/:id", async (req, res, next) => {
   try {
-    const vehicle = await Vehicle.findById(req.params.id);
-    if (!vehicle) {
-      return res.status(404).json({ message: "Vehicle not found" });
+    const { id } = req.params;
+    
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
     }
-    res.json(vehicle);
+    
+    const vehicle = await Vehicle.findById(id).lean();
+    
+    if (!vehicle) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Vehicle not found" 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: vehicle
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error fetching vehicle:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while fetching vehicle" 
+    });
   }
 });
 
 // Add Vehicle (Admin Only)
-router.post("/", auth, admin, upload.single("image"), async (req, res) => {
+router.post("/", auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
   try {
     const { name, brand, pricePerDay } = req.body;
 
     // Validate required fields
     if (!name || !brand || !pricePerDay) {
-      return res.status(400).json({ message: "Please provide all required fields" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide all required fields (name, brand, pricePerDay)" 
+      });
+    }
+
+    const price = parseInt(pricePerDay);
+    if (isNaN(price) || price <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid price value"
+      });
     }
 
     let imageUrl = "";
@@ -107,34 +175,78 @@ router.post("/", auth, admin, upload.single("image"), async (req, res) => {
     const vehicle = new Vehicle({
       name,
       brand,
-      pricePerDay: parseInt(pricePerDay),
+      pricePerDay: price,
       image: imageUrl,
       available: true
     });
 
-    await vehicle.save();
-    res.status(201).json(vehicle);
+    const savedVehicle = await vehicle.save();
+    
+    res.status(201).json({
+      success: true,
+      message: "Vehicle created successfully",
+      data: savedVehicle
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error creating vehicle:", err);
+    
+    // Handle mongoose validation errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while creating vehicle" 
+    });
   }
 });
 
 // Update Vehicle (Admin Only)
-router.put("/:id", auth, admin, upload.single("image"), async (req, res) => {
+router.put("/:id", auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
   try {
+    const { id } = req.params;
     const { name, brand, pricePerDay, available } = req.body;
     
-    let vehicle = await Vehicle.findById(req.params.id);
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
+    }
+    
+    let vehicle = await Vehicle.findById(id);
+    
     if (!vehicle) {
-      return res.status(404).json({ message: "Vehicle not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Vehicle not found" 
+      });
     }
 
     // Update fields
     if (name) vehicle.name = name;
     if (brand) vehicle.brand = brand;
-    if (pricePerDay) vehicle.pricePerDay = parseInt(pricePerDay);
-    if (available !== undefined) vehicle.available = available === true || available === "true" || available === "on";
+    
+    if (pricePerDay) {
+      const price = parseInt(pricePerDay);
+      if (isNaN(price) || price <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid price value"
+        });
+      }
+      vehicle.pricePerDay = price;
+    }
+    
+    if (available !== undefined) {
+      vehicle.available = available === true || available === "true" || available === "on";
+    }
 
     // Handle image update - save locally
     if (req.file) {
@@ -143,27 +255,63 @@ router.put("/:id", auth, admin, upload.single("image"), async (req, res) => {
         // Remove leading slash for path join
         const oldImagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
         if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath);
+          try {
+            fs.unlinkSync(oldImagePath);
+          } catch (fileErr) {
+            console.error("Error deleting old image:", fileErr);
+          }
         }
       }
       // Save new image path
       vehicle.image = `/uploads/vehicles/${req.file.filename}`;
     }
 
-    await vehicle.save();
-    res.json(vehicle);
+    const updatedVehicle = await vehicle.save();
+    
+    res.json({
+      success: true,
+      message: "Vehicle updated successfully",
+      data: updatedVehicle
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error updating vehicle:", err);
+    
+    // Handle mongoose validation errors
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while updating vehicle" 
+    });
   }
 });
 
 // Delete Vehicle (Admin Only)
 router.delete("/:id", auth, admin, async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(req.params.id);
+    const { id } = req.params;
+    
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
+    }
+    
+    const vehicle = await Vehicle.findById(id);
+    
     if (!vehicle) {
-      return res.status(404).json({ message: "Vehicle not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Vehicle not found" 
+      });
     }
 
     // Delete associated image file if exists
@@ -171,15 +319,26 @@ router.delete("/:id", auth, admin, async (req, res) => {
       // Remove leading slash for path join
       const imagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
       if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
+        try {
+          fs.unlinkSync(imagePath);
+        } catch (fileErr) {
+          console.error("Error deleting image:", fileErr);
+        }
       }
     }
 
     await vehicle.deleteOne();
-    res.json({ message: "Vehicle deleted successfully" });
+    
+    res.json({ 
+      success: true,
+      message: "Vehicle deleted successfully" 
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error deleting vehicle:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error while deleting vehicle" 
+    });
   }
 });
 
