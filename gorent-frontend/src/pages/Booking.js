@@ -3,21 +3,26 @@ import axios from "axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+// Get API URL from environment or use default
+const getApiUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:5000/api";
+  }
+  return `${window.location.protocol}//${window.location.host}/api`;
+};
 
-// Get the base URL (without /api)
+const API_URL = getApiUrl();
 const BASE_URL = API_URL.replace("/api", "");
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
   if (imagePath.startsWith("http")) return imagePath;
-  // If it's a local path starting with /uploads, prepend the server base URL
   if (imagePath.startsWith("/uploads")) {
     return BASE_URL + imagePath;
   }
-  // Fallback: prepend BASE_URL
   return BASE_URL + imagePath;
 };
 
@@ -30,18 +35,7 @@ function Bookings() {
   const { confirm } = useConfirmDialog();
 
   useEffect(() => {
-    // Initial fetch with loading indicator
     fetchBookings(true);
-    
-    // Poll for booking updates every 5 seconds WITHOUT loading indicator
-    // Only in development - remove in production for better performance
-    if (process.env.NODE_ENV !== "production") {
-      const interval = setInterval(() => {
-        fetchBookings(false);
-      }, 5000);
-      
-      return () => clearInterval(interval);
-    }
   }, []);
 
   const fetchBookings = async (showLoading = true) => {
@@ -49,38 +43,33 @@ function Bookings() {
       if (showLoading) {
         setLoading(true);
       }
+      setError("");
+      
       const token = localStorage.getItem("token");
       
       const res = await axios.get(`${API_URL}/bookings`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 10000 // 10 second timeout
+        timeout: 10000
       });
       
       // Handle both old format (array) and new format ({success, data})
       let bookingData = [];
       if (Array.isArray(res.data)) {
-        // Old format - direct array
         bookingData = res.data;
       } else if (res.data && res.data.data) {
-        // New format - {success, data, count}
         bookingData = res.data.data;
-      } else if (res.data && Array.isArray(res.data.bookings)) {
-        // Alternative format - {bookings: []}
-        bookingData = res.data.bookings;
       }
       
-      // Only update state if data has changed (for smooth updates)
-      setBookings(prevBookings => {
-        // Compare and only update if there are actual changes
-        if (JSON.stringify(prevBookings) !== JSON.stringify(bookingData)) {
-          return bookingData;
-        }
-        return prevBookings;
-      });
-      setError("");
+      setBookings(bookingData);
     } catch (err) {
       console.error("Error fetching bookings:", err);
-      setError(err.response?.data?.message || "Failed to load bookings");
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.code === "ECONNABORTED") {
+        setError("Request timeout. Please try again.");
+      } else {
+        setError("Failed to load bookings");
+      }
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -100,12 +89,11 @@ function Bookings() {
           { headers: { Authorization: `Bearer ${token}` } }
         );
         
-        // Refresh bookings
         fetchBookings();
         addToast(res.data?.message || "Booking cancelled successfully", "success");
       } catch (err) {
         console.error("Cancel booking error:", err);
-        addToast(err.response?.data?.message || err.response?.data?.error || "Failed to cancel booking", "error");
+        addToast(err.response?.data?.message || "Failed to cancel booking", "error");
       } finally {
         setCancelling(null);
       }

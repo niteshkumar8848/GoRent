@@ -5,26 +5,38 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useToast } from "../components/Toast";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+// Get API URL from environment or use default
+const getApiUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
+  // For development, try to detect if running on localhost
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:5000/api";
+  }
+  // For production, construct URL from current hostname
+  return `${window.location.protocol}//${window.location.host}/api`;
+};
 
-// Get the base URL (without /api)
-const BASE_URL = API_URL.replace("/api", "");
+const API_URL = getApiUrl();
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  
-  // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
   if (imagePath.startsWith("http")) return imagePath;
-  
-  // If it's a local path starting with /uploads, prepend the server base URL
   if (imagePath.startsWith("/uploads")) {
-    return BASE_URL + imagePath;
+    // Use the API base URL for images
+    return API_URL.replace("/api", "") + imagePath;
   }
-  
-  // Fallback: prepend BASE_URL
-  return BASE_URL + imagePath;
+  return API_URL.replace("/api", "") + imagePath;
 };
+
+// Axios instance with timeout
+const api = axios.create({
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json"
+  }
+});
 
 function Home() {
   const [vehicles, setVehicles] = useState([]);
@@ -32,12 +44,10 @@ function Home() {
   const [error, setError] = useState("");
   const { addToast } = useToast();
   
-  // Search and filter states
   const [search, setSearch] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [brand, setBrand] = useState("");
   
-  // Booking states
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
@@ -47,46 +57,32 @@ function Home() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  // Fetch vehicles - with option to skip loading indicator
   const fetchVehicles = async (showLoading = true) => {
     try {
       if (showLoading) {
         setLoading(true);
       }
+      setError("");
+      
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (maxPrice) params.append("maxPrice", maxPrice);
       if (brand) params.append("brand", brand);
 
-      const res = await axios.get(`${API_URL}/vehicles?${params}`, {
-        timeout: 10000 // 10 second timeout
-      });
+      const res = await api.get(`${API_URL}/vehicles?${params}`);
       
-      // Handle both old format (array) and new format ({success, data})
-      let vehicleData = [];
-      if (Array.isArray(res.data)) {
-        // Old format - direct array
-        vehicleData = res.data;
-      } else if (res.data && res.data.data) {
-        // New format - {success, data, count}
-        vehicleData = res.data.data;
-      } else if (res.data && Array.isArray(res.data.vehicles)) {
-        // Alternative format - {vehicles: []}
-        vehicleData = res.data.vehicles;
-      }
-      
-      // Only update state if data has changed (for smooth updates)
-      setVehicles(prevVehicles => {
-        // Compare and only update if there are actual changes
-        if (JSON.stringify(prevVehicles) !== JSON.stringify(vehicleData)) {
-          return vehicleData;
-        }
-        return prevVehicles;
-      });
-      setError("");
+      // Handle new response format
+      const vehiclesData = res.data.data || res.data;
+      setVehicles(vehiclesData);
     } catch (err) {
       console.error("Error fetching vehicles:", err);
-      setError(err.response?.data?.message || "Failed to load vehicles");
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.code === "ECONNABORTED") {
+        setError("Request timeout. Please try again.");
+      } else {
+        setError("Failed to load vehicles");
+      }
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -95,27 +91,14 @@ function Home() {
   };
 
   useEffect(() => {
-    // Initial fetch with loading indicator
     fetchVehicles(true);
-    
-    // Poll for vehicle updates every 5 seconds WITHOUT loading indicator
-    // Only in development - remove in production for better performance
-    if (process.env.NODE_ENV !== "production") {
-      const interval = setInterval(() => {
-        fetchVehicles(false);
-      }, 5000);
-      
-      return () => clearInterval(interval);
-    }
   }, []);
 
-  // Handle search
   const handleSearch = (e) => {
     e.preventDefault();
     fetchVehicles();
   };
 
-  // Calculate booking price
   const calculateDays = () => {
     const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
     return days > 0 ? days : 0;
@@ -126,7 +109,6 @@ function Home() {
     return calculateDays() * selectedVehicle.pricePerDay;
   };
 
-  // Handle booking
   const handleBooking = async () => {
     if (!token) {
       navigate("/login");
@@ -142,7 +124,7 @@ function Home() {
       setBookingLoading(true);
       setBookingError("");
       
-      const res = await axios.post(
+      const res = await api.post(
         `${API_URL}/bookings`,
         {
           vehicleId: selectedVehicle._id,
@@ -154,18 +136,21 @@ function Home() {
         }
       );
 
-      addToast(res.data?.message || "Booking successful!", "success");
+      addToast("Booking successful!", "success");
       setSelectedVehicle(null);
       navigate("/bookings");
     } catch (err) {
       console.error("Booking error:", err);
-      setBookingError(err.response?.data?.message || err.response?.data?.error || "Failed to create booking");
+      if (err.response?.data?.message) {
+        setBookingError(err.response.data.message);
+      } else {
+        setBookingError("Failed to create booking");
+      }
     } finally {
       setBookingLoading(false);
     }
   };
 
-  // Get unique brands for filter
   const brands = [...new Set(vehicles.map(v => v.brand).filter(Boolean))];
 
   return (
@@ -176,7 +161,6 @@ function Home() {
           <p className="page-subtitle">Choose from our wide range of vehicles at affordable prices</p>
         </div>
 
-        {/* Search and Filter */}
         <div className="search-filter">
           <form onSubmit={handleSearch} className="search-filters">
             <input
@@ -210,19 +194,16 @@ function Home() {
           </form>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="alert alert-error">{error}</div>
         )}
 
-        {/* Loading State */}
         {loading ? (
           <div className="loading-container">
             <div className="spinner"></div>
           </div>
         ) : (
           <>
-            {/* Vehicle Grid */}
             {vehicles.length > 0 ? (
               <div className="vehicle-grid">
                 {vehicles.map(vehicle => (
@@ -263,7 +244,6 @@ function Home() {
           </>
         )}
 
-        {/* Booking Modal */}
         {selectedVehicle && (
           <div className="modal-overlay" onClick={() => setSelectedVehicle(null)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>

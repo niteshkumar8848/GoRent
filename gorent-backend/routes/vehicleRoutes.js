@@ -5,26 +5,35 @@ const admin = require("../middleware/adminMiddleware");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const mongoose = require("mongoose");
+
+// Middleware to check if MongoDB is connected
+const checkDB = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      message: "Database is not available. Please try again later."
+    });
+  }
+  next();
+};
 
 // Configure multer for local file storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = "uploads/vehicles";
-    // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename: vehicle_timestamp.extension
     const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
     cb(null, "vehicle_" + uniqueSuffix + ext);
   }
 });
 
-// Filter to only allow image files
 const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
@@ -36,12 +45,9 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ 
   storage: storage,
   fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// Multer error handler middleware
 const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
@@ -55,19 +61,17 @@ const handleMulterError = (err, req, res, next) => {
       message: `File upload error: ${err.message}`
     });
   }
-  
   if (err) {
     return res.status(400).json({
       success: false,
       message: err.message
     });
   }
-  
   next();
 };
 
-// Get all vehicles with search and filter
-router.get("/", async (req, res, next) => {
+// Get all vehicles
+router.get("/", checkDB, async (req, res) => {
   try {
     const { search, maxPrice, brand } = req.query;
     let query = {};
@@ -109,11 +113,10 @@ router.get("/", async (req, res, next) => {
 });
 
 // Get single vehicle
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", checkDB, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Validate ObjectId format
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
@@ -130,10 +133,7 @@ router.get("/:id", async (req, res, next) => {
       });
     }
     
-    res.json({
-      success: true,
-      data: vehicle
-    });
+    res.json({ success: true, data: vehicle });
   } catch (err) {
     console.error("Error fetching vehicle:", err);
     res.status(500).json({ 
@@ -144,11 +144,10 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // Add Vehicle (Admin Only)
-router.post("/", auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
+router.post("/", checkDB, auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
   try {
     const { name, brand, pricePerDay } = req.body;
 
-    // Validate required fields
     if (!name || !brand || !pricePerDay) {
       return res.status(400).json({ 
         success: false,
@@ -166,9 +165,7 @@ router.post("/", auth, admin, upload.single("image"), handleMulterError, async (
 
     let imageUrl = "";
     
-    // Save image locally if uploaded
     if (req.file) {
-      // Create URL path for the uploaded file
       imageUrl = `/uploads/vehicles/${req.file.filename}`;
     }
 
@@ -190,7 +187,6 @@ router.post("/", auth, admin, upload.single("image"), handleMulterError, async (
   } catch (err) {
     console.error("Error creating vehicle:", err);
     
-    // Handle mongoose validation errors
     if (err.name === "ValidationError") {
       return res.status(400).json({
         success: false,
@@ -207,12 +203,11 @@ router.post("/", auth, admin, upload.single("image"), handleMulterError, async (
 });
 
 // Update Vehicle (Admin Only)
-router.put("/:id", auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
+router.put("/:id", checkDB, auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, brand, pricePerDay, available } = req.body;
     
-    // Validate ObjectId format
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
@@ -229,17 +224,13 @@ router.put("/:id", auth, admin, upload.single("image"), handleMulterError, async
       });
     }
 
-    // Update fields
     if (name) vehicle.name = name;
     if (brand) vehicle.brand = brand;
     
     if (pricePerDay) {
       const price = parseInt(pricePerDay);
       if (isNaN(price) || price <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid price value"
-        });
+        return res.status(400).json({ success: false, message: "Invalid price value" });
       }
       vehicle.pricePerDay = price;
     }
@@ -248,21 +239,13 @@ router.put("/:id", auth, admin, upload.single("image"), handleMulterError, async
       vehicle.available = available === true || available === "true" || available === "on";
     }
 
-    // Handle image update - save locally
     if (req.file) {
-      // Delete old image if exists
       if (vehicle.image) {
-        // Remove leading slash for path join
         const oldImagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
         if (fs.existsSync(oldImagePath)) {
-          try {
-            fs.unlinkSync(oldImagePath);
-          } catch (fileErr) {
-            console.error("Error deleting old image:", fileErr);
-          }
+          try { fs.unlinkSync(oldImagePath); } catch (e) { console.error(e); }
         }
       }
-      // Save new image path
       vehicle.image = `/uploads/vehicles/${req.file.filename}`;
     }
 
@@ -276,7 +259,6 @@ router.put("/:id", auth, admin, upload.single("image"), handleMulterError, async
   } catch (err) {
     console.error("Error updating vehicle:", err);
     
-    // Handle mongoose validation errors
     if (err.name === "ValidationError") {
       return res.status(400).json({
         success: false,
@@ -293,11 +275,10 @@ router.put("/:id", auth, admin, upload.single("image"), handleMulterError, async
 });
 
 // Delete Vehicle (Admin Only)
-router.delete("/:id", auth, admin, async (req, res) => {
+router.delete("/:id", checkDB, auth, admin, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Validate ObjectId format
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
@@ -314,25 +295,16 @@ router.delete("/:id", auth, admin, async (req, res) => {
       });
     }
 
-    // Delete associated image file if exists
     if (vehicle.image) {
-      // Remove leading slash for path join
       const imagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
       if (fs.existsSync(imagePath)) {
-        try {
-          fs.unlinkSync(imagePath);
-        } catch (fileErr) {
-          console.error("Error deleting image:", fileErr);
-        }
+        try { fs.unlinkSync(imagePath); } catch (e) { console.error(e); }
       }
     }
 
     await vehicle.deleteOne();
     
-    res.json({ 
-      success: true,
-      message: "Vehicle deleted successfully" 
-    });
+    res.json({ success: true, message: "Vehicle deleted successfully" });
   } catch (err) {
     console.error("Error deleting vehicle:", err);
     res.status(500).json({ 

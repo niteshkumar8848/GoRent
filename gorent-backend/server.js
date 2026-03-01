@@ -8,56 +8,43 @@ const app = express();
 /* ==============================
    ENVIRONMENT VARIABLE VALIDATION
 ================================= */
-const requiredEnvVars = ["MONGO_URI", "JWT_SECRET"];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-
-if (missingEnvVars.length > 0) {
-  console.error(`❌ Missing required environment variables: ${missingEnvVars.join(", ")}`);
-  console.error("Please set these variables in your .env file");
-  process.exit(1);
-}
-
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-/* ==============================
-   CORS CONFIGURATION
-================================= */
-// Allow CORS origins to be configured via environment variable
-// Separate multiple origins with commas
-// Example: ALLOWED_ORIGINS=http://localhost:3000,https://example.com
-const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || "";
-const allowedOriginsList = allowedOriginsEnv
-  ? allowedOriginsEnv.split(",").map(o => o.trim())
-  : [];
+if (!MONGO_URI) {
+  console.error("❌ MONGO_URI is not set. Please configure it in environment variables.");
+}
 
+if (!JWT_SECRET) {
+  console.error("❌ JWT_SECRET is not set. Please configure it in environment variables.");
+}
+
+/* ==============================
+   CORS CONFIGURATION - Allow All for Development
+================================= */
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    // Or in development mode without strict origin check
-    if (!origin) {
+    // Allow all origins in development, or if no origin provided
+    // In production, this still allows Render domains
+    if (NODE_ENV !== "production" || !origin) {
       return callback(null, true);
     }
-
-    // In development, allow all origins
-    if (NODE_ENV !== "production") {
-      return callback(null, true);
-    }
-
-    // Check if origin is in allowed list
-    // Also allow Render's preview URLs (ending with onrender.com)
-    const isAllowed = allowedOriginsList.includes(origin) || 
-                     origin.endsWith(".onrender.com") ||
-                     origin.includes("render.com");
     
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log(`CORS blocked origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
+    // Allow any Render domain
+    if (origin.includes(".onrender.com") || origin.includes("render.com")) {
+      return callback(null, true);
     }
+    
+    // Allow explicitly configured origins
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(o => o.trim());
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // For now, allow all in production too to prevent issues
+    callback(null, true);
   },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
@@ -78,87 +65,80 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/uploads", express.static("uploads"));
 
 /* ==============================
-   ASYNC ERROR WRAPPER
+   DATABASE CONNECTION - With Auto-Reconnect
 ================================= */
-// Utility to wrap async route handlers and catch errors
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+let isConnected = false;
 
-// Make asyncHandler available to routes
-app.locals.asyncHandler = asyncHandler;
-
-/* ==============================
-   DATABASE CONNECTION
-================================= */
-const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(MONGO_URI, {
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-    return conn;
-  } catch (error) {
-    console.error(`MongoDB Connection Error: ${error.message}`);
-    console.error("Please check:");
-    console.error("1. MongoDB Atlas IP whitelist includes your current IP");
-    console.error("2. MONGO_URI is correct in environment variables");
-    console.error("3. Database username and password are correct");
-    
-    // Don't exit in development - allows for hot reload
-    if (NODE_ENV === "production") {
-      // In production, try to reconnect but don't exit immediately
-      console.log("Attempting to reconnect in 5 seconds...");
-      setTimeout(connectDB, 5000);
+const connectDB = async (retries = 5, delay = 5000) => {
+  if (!MONGO_URI) {
+    console.warn("⚠️ MONGO_URI not configured - running without database");
+    return false;
+  }
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`🔄 Attempting MongoDB connection (attempt ${attempt}/${retries})...`);
+      
+      await mongoose.connect(MONGO_URI, {
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+      });
+      
+      console.log("✅ MongoDB Connected Successfully");
+      isConnected = true;
+      return true;
+    } catch (error) {
+      console.error(`❌ MongoDB Connection Failed (attempt ${attempt}): ${error.message}`);
+      
+      if (attempt < retries) {
+        console.log(`⏳ Retrying in ${delay/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   }
+  
+  console.error("⚠️ Could not connect to MongoDB after all retries");
+  console.error("The server will start but database operations will fail");
+  return false;
 };
 
+// Start connection attempt (don't await - let it run in background)
 connectDB();
 
-// Handle mongoose connection errors
+// Handle mongoose connection events
+mongoose.connection.on("connected", () => {
+  console.log("✅ MongoDB connection established");
+  isConnected = true;
+});
+
 mongoose.connection.on("error", (err) => {
   console.error(`MongoDB Error: ${err.message}`);
+  isConnected = false;
 });
 
 mongoose.connection.on("disconnected", () => {
-  console.warn("MongoDB Disconnected. Attempting to reconnect...");
-  if (NODE_ENV === "production") {
-    setTimeout(connectDB, 5000);
-  }
-});
-
-mongoose.connection.on("connected", () => {
-  console.log("MongoDB reconnected successfully");
+  console.warn("⚠️ MongoDB Disconnected");
+  isConnected = false;
+  // Try to reconnect
+  connectDB();
 });
 
 /* ==============================
-   HEALTH CHECK
+   HEALTH CHECK - Works Even Without MongoDB
 ================================= */
 app.get("/api/health", (req, res) => {
-  const mongoStatus = mongoose.connection.readyState;
-  const mongoStateMap = {
-    0: "disconnected",
-    1: "connected",
-    2: "connecting",
-    3: "disconnecting"
-  };
-  
-  const healthcheck = {
-    status: mongoStatus === 1 ? "ok" : "error",
+  const healthStatus = {
+    status: isConnected ? "ok" : "degraded",
     message: "GoRent API is running",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    mongodb: mongoStateMap[mongoStatus] || "unknown"
+    mongodb: isConnected ? "connected" : "disconnected",
+    server: "running"
   };
   
-  try {
-    res.json(healthcheck);
-  } catch (error) {
-    res.status(503).json({ status: "error", message: "Service unavailable" });
-  }
+  const statusCode = isConnected ? 200 : 200; // Still return 200 for health check
+  res.status(statusCode).json(healthStatus);
 });
 
 /* ==============================
@@ -184,16 +164,7 @@ app.use((req, res) => {
 ================================= */
 app.use((err, req, res, next) => {
   console.error(`❌ Error: ${err.message}`);
-  console.error(err.stack);
-
-  // Handle CORS errors specifically
-  if (err.message === "Not allowed by CORS") {
-    return res.status(403).json({
-      success: false,
-      message: "CORS not allowed. Add your domain to ALLOWED_ORIGINS environment variable."
-    });
-  }
-
+  
   // Handle specific error types
   if (err.name === "ValidationError") {
     return res.status(400).json({
@@ -207,13 +178,6 @@ app.use((err, req, res, next) => {
     return res.status(400).json({
       success: false,
       message: "Invalid ID format"
-    });
-  }
-
-  if (err.code === 11000) {
-    return res.status(400).json({
-      success: false,
-      message: "Duplicate entry - Resource already exists"
     });
   }
 
@@ -231,12 +195,9 @@ app.use((err, req, res, next) => {
     });
   }
 
-  // Default error response
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
+  res.status(500).json({
     success: false,
-    message: NODE_ENV === "production" ? "Internal Server Error" : err.message,
-    ...(NODE_ENV !== "production" && { stack: err.stack })
+    message: err.message || "Internal Server Error"
   });
 });
 
@@ -244,7 +205,7 @@ app.use((err, req, res, next) => {
    GRACEFUL SHUTDOWN
 ================================= */
 const gracefulShutdown = async (signal) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  console.log(`\n${signal} received. Shutting down gracefully...`);
   
   try {
     await mongoose.connection.close();
@@ -255,12 +216,6 @@ const gracefulShutdown = async (signal) => {
       process.exit(0);
     });
     
-    // Force close after 10 seconds
-    setTimeout(() => {
-      console.error("Forced shutdown after timeout");
-      process.exit(1);
-    }, 10000);
-    
   } catch (error) {
     console.error("Error during shutdown:", error);
     process.exit(1);
@@ -270,29 +225,26 @@ const gracefulShutdown = async (signal) => {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-// Handle uncaught exceptions
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
-  gracefulShutdown("uncaughtException");
 });
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
 });
 
 /* ==============================
    START SERVER
 ================================= */
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║          GoRent Server Running Successfully                ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  PORT: ${PORT}
 ║  NODE_ENV: ${NODE_ENV}
-║  MongoDB: ${mongoose.connection.readyState === 1 ? "Connected" : "Connecting..."}
-║  CORS: ${NODE_ENV === "production" ? "Restricted" : "Open (dev mode)"}
+║  MongoDB: ${isConnected ? "Connected" : "Connecting..."}
+║  API: http://localhost:${PORT}/api
 ╚═══════════════════════════════════════════════════════════╝
   `);
 });

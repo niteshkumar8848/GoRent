@@ -1,73 +1,81 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useToast } from "../components/Toast";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+// Get API URL from environment or use default
+const getApiUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:5000/api";
+  }
+  return `${window.location.protocol}//${window.location.host}/api`;
+};
+
+const API_URL = getApiUrl();
 
 function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: ""
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
   const navigate = useNavigate();
+  const { addToast } = useToast();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!email || !password) {
-      setError("Please fill in all fields");
+    if (!formData.email || !formData.password) {
+      setError("Please enter both email and password");
       return;
     }
 
+    setLoading(true);
+    setError("");
+
     try {
-      setLoading(true);
-      setError("");
-      
-      const res = await axios.post(`${API_URL}/auth/login`, { 
-        email, 
-        password 
-      }, {
-        timeout: 10000 // 10 second timeout
+      const res = await axios.post(`${API_URL}/auth/login`, formData, {
+        timeout: 10000
       });
+
+      // Handle new response format
+      const responseData = res.data.data || res.data;
       
-      // Handle both old and new response formats
-      const responseData = res.data;
-      
-      // Check for success in both formats
-      if (responseData.success === false) {
-        setError(responseData.message || "Login failed");
-        return;
-      }
-      
-      // Get token and user from response
-      const token = responseData.token;
-      const user = responseData.user;
-      
-      if (!token) {
-        setError("Invalid response from server");
-        return;
-      }
-      
-      // Store token and user info in localStorage (shared across tabs)
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      
-      // Redirect based on role
-      if (user.role === "admin") {
-        navigate("/admin");
-      } else {
-        navigate("/");
+      if (responseData.token) {
+        localStorage.setItem("token", responseData.token);
+        localStorage.setItem("user", JSON.stringify({
+          id: responseData.id,
+          name: responseData.name,
+          email: responseData.email,
+          role: responseData.role
+        }));
+
+        addToast("Login successful!", "success");
+        
+        // Redirect based on role
+        if (responseData.role === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/dashboard");
+        }
       }
     } catch (err) {
       console.error("Login error:", err);
-      // Handle error response
-      if (err.response) {
-        setError(err.response.data?.message || err.response.data?.error || "Login failed. Please try again.");
-      } else if (err.request) {
-        setError("Server is not responding. Please try again later.");
+      
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.code === "ECONNABORTED") {
+        setError("Request timeout. Please try again.");
       } else {
-        setError("Login failed. Please try again.");
+        setError("Login failed. Please check your credentials.");
       }
     } finally {
       setLoading(false);
@@ -75,51 +83,55 @@ function Login() {
   };
 
   return (
-    <div className="page">
+    <div className="auth-page">
       <div className="auth-container">
-        <img src="/logo.jpg" alt="GoRent" className="auth-logo" />
-        <h1 className="auth-title">Welcome Back</h1>
-        
-        {error && (
-          <div className="alert alert-error">{error}</div>
-        )}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <input
-              type="email"
-              className="form-input"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          
-          <button 
-            type="submit" 
-            className="btn btn-primary form-submit"
-            disabled={loading}
-          >
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-        
-        <div className="auth-footer">
-          Don't have an account? <Link to="/register">Register here</Link>
+        <div className="auth-card">
+          <h1 className="auth-title">Welcome Back</h1>
+          <p className="auth-subtitle">Login to continue</p>
+
+          {error && (
+            <div className="alert alert-error">{error}</div>
+          )}
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input
+                type="email"
+                name="email"
+                className="form-input"
+                placeholder="Enter your email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                name="password"
+                className="form-input"
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={loading}
+            >
+              {loading ? "Logging in..." : "Login"}
+            </button>
+          </form>
+
+          <p className="auth-footer">
+            Don't have an account? <Link to="/register">Register</Link>
+          </p>
         </div>
       </div>
     </div>

@@ -1,80 +1,89 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useToast } from "../components/Toast";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+// Get API URL from environment or use default
+const getApiUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:5000/api";
+  }
+  return `${window.location.protocol}//${window.location.host}/api`;
+};
+
+const API_URL = getApiUrl();
 
 function Register() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: ""
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
   const navigate = useNavigate();
+  const { addToast } = useToast();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!name || !email || !password || !confirmPassword) {
-      setError("Please fill in all fields");
+    if (!formData.name || !formData.email || !formData.password) {
+      setError("Please fill in all required fields");
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    if (password.length < 6) {
+    if (formData.password.length < 6) {
       setError("Password must be at least 6 characters");
       return;
     }
 
+    setLoading(true);
+    setError("");
+
     try {
-      setLoading(true);
-      setError("");
-      
-      const res = await axios.post(`${API_URL}/auth/register`, { 
-        name, 
-        email, 
-        password 
+      const res = await axios.post(`${API_URL}/auth/register`, {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
       }, {
-        timeout: 10000 // 10 second timeout
+        timeout: 10000
       });
+
+      // Handle new response format
+      const responseData = res.data.data || res.data;
       
-      // Handle both old and new response formats
-      const responseData = res.data;
-      
-      // Check for success in both formats
-      if (responseData.success === false) {
-        setError(responseData.message || "Registration failed");
-        return;
+      if (responseData.token) {
+        localStorage.setItem("token", responseData.token);
+        localStorage.setItem("user", JSON.stringify({
+          id: responseData.id,
+          name: responseData.name,
+          email: responseData.email,
+          role: responseData.role
+        }));
+
+        addToast("Registration successful!", "success");
+        navigate("/dashboard");
       }
-      
-      // Get token and user from response
-      const token = responseData.token;
-      const user = responseData.user;
-      
-      if (!token) {
-        setError("Invalid response from server");
-        return;
-      }
-      
-      // Store token and user info in localStorage (shared across tabs)
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      
-      // Redirect to home
-      navigate("/");
     } catch (err) {
       console.error("Registration error:", err);
-      // Handle error response
-      if (err.response) {
-        setError(err.response.data?.message || err.response.data?.error || "Registration failed. Please try again.");
-      } else if (err.request) {
-        setError("Server is not responding. Please try again later.");
+      
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.code === "ECONNABORTED") {
+        setError("Request timeout. Please try again.");
       } else {
         setError("Registration failed. Please try again.");
       }
@@ -84,75 +93,82 @@ function Register() {
   };
 
   return (
-    <div className="page">
+    <div className="auth-page">
       <div className="auth-container">
-        <img src="/logo.jpg" alt="GoRent" className="auth-logo" />
-        <h1 className="auth-title">Create Account</h1>
-        
-        {error && (
-          <div className="alert alert-error">{error}</div>
-        )}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Enter your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <input
-              type="email"
-              className="form-input"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Create a password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label className="form-label">Confirm Password</label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Confirm your password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-          
-          <button 
-            type="submit" 
-            className="btn btn-primary form-submit"
-            disabled={loading}
-          >
-            {loading ? "Creating account..." : "Register"}
-          </button>
-        </form>
-        
-        <div className="auth-footer">
-          Already have an account? <Link to="/login">Login here</Link>
+        <div className="auth-card">
+          <h1 className="auth-title">Create Account</h1>
+          <p className="auth-subtitle">Join GoRent today</p>
+
+          {error && (
+            <div className="alert alert-error">{error}</div>
+          )}
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input
+                type="text"
+                name="name"
+                className="form-input"
+                placeholder="Enter your name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input
+                type="email"
+                name="email"
+                className="form-input"
+                placeholder="Enter your email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                name="password"
+                className="form-input"
+                placeholder="Create a password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                minLength={6}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Confirm Password</label>
+              <input
+                type="password"
+                name="confirmPassword"
+                className="form-input"
+                placeholder="Confirm your password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={loading}
+            >
+              {loading ? "Creating account..." : "Register"}
+            </button>
+          </form>
+
+          <p className="auth-footer">
+            Already have an account? <Link to="/login">Login</Link>
+          </p>
         </div>
       </div>
     </div>
