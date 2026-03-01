@@ -164,6 +164,56 @@ app.get("/api/health", (req, res) => {
 });
 
 /* ==============================
+   ADMIN RESET ENDPOINT (For development only)
+================================= */
+app.post("/api/admin/reset", async (req, res) => {
+  // Only allow in development or with a secret key
+  const secretKey = req.body.secretKey;
+  const adminSecret = process.env.ADMIN_SECRET || "gorent-admin-reset";
+  
+  if (NODE_ENV === "production" && secretKey !== adminSecret) {
+    return res.status(403).json({ 
+      success: false,
+      message: "Invalid secret key" 
+    });
+  }
+  
+  try {
+    const adminEmail = "admin@gorent.com";
+    
+    // Delete existing admin if any
+    await User.deleteOne({ email: adminEmail });
+    
+    // Create new admin
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    const admin = new User({
+      name: "Admin",
+      email: adminEmail,
+      password: hashedPassword,
+      role: "admin"
+    });
+    await admin.save();
+    
+    console.log("✅ Admin password reset!");
+    
+    res.json({
+      success: true,
+      message: "Admin account reset successfully",
+      credentials: {
+        email: "admin@gorent.com",
+        password: "admin123"
+      }
+    });
+  } catch (error) {
+    console.error("Admin reset error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reset admin"
+    });
+  }
+});
+
+/* ==============================
    ROUTES
 ================================= */
 app.use("/api/auth", require("./routes/authRoutes"));

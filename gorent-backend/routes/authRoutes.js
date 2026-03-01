@@ -123,17 +123,24 @@ router.post("/login", checkDB, async (req, res) => {
       });
     }
 
+    console.log("Login attempt for:", email.toLowerCase());
+
     // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
+      console.log("User not found:", email);
       return res.status(400).json({ 
         success: false,
         message: "Invalid credentials" 
       });
     }
 
+    console.log("User found:", user.email, "role:", user.role);
+
     // Check password
     const validPass = await bcrypt.compare(password, user.password);
+    console.log("Password valid:", validPass);
+    
     if (!validPass) {
       return res.status(400).json({ 
         success: false,
@@ -147,6 +154,8 @@ router.post("/login", checkDB, async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    console.log("Login successful for:", user.email);
 
     res.json({
       success: true,
