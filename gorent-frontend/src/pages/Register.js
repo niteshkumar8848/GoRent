@@ -54,6 +54,7 @@ function Register() {
   return (
     <div className="page">
       <div className="auth-container">
+        <img src="/logo.jpg" alt="GoRent" className="auth-logo" />
         <h1 className="auth-title">Create Account</h1>
         
         {error && (

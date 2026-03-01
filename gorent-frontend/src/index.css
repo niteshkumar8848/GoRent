@@ -65,6 +65,21 @@ body {
   font-weight: 700;
   color: var(--primary-color);
   text-decoration: none;
+  display: flex;
+  align-items: center;
+}
+
+.navbar-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.navbar-logo-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
 }
 
 .navbar-menu {
@@ -256,6 +271,15 @@ body {
 
 .auth-footer a:hover {
   text-decoration: underline;
+}
+
+/* Auth Logo */
+.auth-logo {
+  display: block;
+  margin: 0 auto 1.5rem;
+  height: 60px;
+  width: auto;
+  object-fit: contain;
 }
 
 /* Vehicle Grid */

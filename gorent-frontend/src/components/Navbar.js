@@ -17,7 +17,9 @@ function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-container">
-        <Link to="/" className="navbar-brand">GoRent</Link>
+        <Link to="/" className="navbar-brand">
+          <img src="/logo.jpg" alt="GoRent" className="navbar-logo" />
+        </Link>
         
         <div className="navbar-menu">
           <Link 
