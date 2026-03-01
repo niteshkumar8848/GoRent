@@ -57,4 +57,4 @@ logs/
 Thumbs.db
 
 # Ignore vehicles Image
-/gorent-backend/uploads/vehicles
+# /gorent-backend/uploads/vehicles

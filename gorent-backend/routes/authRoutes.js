@@ -184,7 +184,7 @@ router.put("/me", auth, async (req, res) => {
   }
 });
 
-// Admin: Update own profile (email and/or password)
+// Admin: Update own profile (name, email and/or password)
 router.put("/admin-profile", auth, async (req, res) => {
   try {
     // Only admins can use this endpoint
@@ -192,11 +192,16 @@ router.put("/admin-profile", auth, async (req, res) => {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
 
-    const { email, currentPassword, newPassword } = req.body;
+    const { name, email, currentPassword, newPassword } = req.body;
     
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: "Admin user not found" });
+    }
+
+    // If changing name, validate it
+    if (name && name.trim().length < 2) {
+      return res.status(400).json({ message: "Name must be at least 2 characters" });
     }
 
     // If changing email or password, current password is required
@@ -210,6 +215,11 @@ router.put("/admin-profile", auth, async (req, res) => {
       if (!validPass) {
         return res.status(400).json({ message: "Current password is incorrect" });
       }
+    }
+
+    // Update name if provided (no password required for name-only changes)
+    if (name && name.trim() !== user.name) {
+      user.name = name.trim();
     }
 
     // Update email if provided
