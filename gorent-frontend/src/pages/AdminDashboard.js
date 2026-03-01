@@ -30,6 +30,7 @@ function AdminDashboard() {
   // Admin profile state
   const [adminProfile, setAdminProfile] = useState(null);
   const [profileForm, setProfileForm] = useState({
+    name: "",
     email: "",
     currentPassword: "",
     newPassword: "",
@@ -96,7 +97,11 @@ function AdminDashboard() {
         return prev;
       });
       if (showLoading || !adminProfile) {
-        setProfileForm(prev => ({ ...prev, email: res.data.email || "" }));
+        setProfileForm(prev => ({ 
+          ...prev, 
+          name: res.data.name || "",
+          email: res.data.email || "" 
+        }));
       }
     } catch (err) {
       console.error("Failed to fetch admin profile");
@@ -284,7 +289,7 @@ function AdminDashboard() {
     }
 
     // Check if there's anything to update
-    if (!profileForm.email && !profileForm.currentPassword && !profileForm.newPassword) {
+    if (!profileForm.name && !profileForm.email && !profileForm.currentPassword && !profileForm.newPassword) {
       addToast("No changes to update", "error");
       return;
     }
@@ -293,6 +298,7 @@ function AdminDashboard() {
       setProfileLoading(true);
       
       const updateData = {
+        name: profileForm.name,
         email: profileForm.email,
         currentPassword: profileForm.currentPassword,
         newPassword: profileForm.newPassword
@@ -539,7 +545,7 @@ function AdminDashboard() {
           <div>
             <div className="settings-container">
               <h2>Admin Profile Settings</h2>
-              <p className="settings-subtitle">Update your email or password</p>
+              <p className="settings-subtitle">Update your name, email or password</p>
               
               <div className="settings-card">
                 <div className="settings-info">
@@ -548,13 +554,28 @@ function AdminDashboard() {
                     <span className="info-value">{adminProfile?.name || "Admin"}</span>
                   </div>
                   <div className="info-row">
+                    <span className="info-label">Email:</span>
+                    <span className="info-value">{adminProfile?.email || "N/A"}</span>
+                  </div>
+                  <div className="info-row">
                     <span className="info-label">Role:</span>
                     <span className="info-value">{adminProfile?.role || "admin"}</span>
                   </div>
                 </div>
                 
                 <form onSubmit={handleProfileSubmit} className="settings-form">
-                  <h3>Update Credentials</h3>
+                  <h3>Update Profile</h3>
+                  
+                  <div className="form-group">
+                    <label className="form-label">Full Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Enter your name"
+                      value={profileForm.name}
+                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                    />
+                  </div>
                   
                   <div className="form-group">
                     <label className="form-label">Email Address</label>
@@ -572,7 +593,7 @@ function AdminDashboard() {
                     <input
                       type="password"
                       className="form-input"
-                      placeholder="Enter current password (required for changes)"
+                      placeholder="Enter current password (required for email/password changes)"
                       value={profileForm.currentPassword}
                       onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
                     />

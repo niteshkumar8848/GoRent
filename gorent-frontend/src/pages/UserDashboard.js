@@ -113,15 +113,6 @@ function UserDashboard() {
           <p className="page-subtitle">Manage your account and view your bookings</p>
         </div>
 
-        {/* Tabs */}
-        <div className="admin-tabs">
-          <button
-            className={`admin-tab ${activeTab === "profile" ? "active" : ""}`}
-            onClick={() => setActiveTab("profile")}
-          >
-            Profile
-          </button>
-        </div>
 
         {/* Profile Tab */}
         {activeTab === "profile" && (

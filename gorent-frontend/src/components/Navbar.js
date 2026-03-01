@@ -1,10 +1,12 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useTheme } from "./ThemeProvider";
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "null");
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -74,6 +76,14 @@ function Navbar() {
                 </Link>
               </>
             )}
+            {/* Theme Toggle Button */}
+            <button 
+              className="btn btn-outline btn-sm theme-toggle" 
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            >
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
           </div>
         </div>
       </div>
