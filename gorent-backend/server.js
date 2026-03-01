@@ -6,15 +6,13 @@ require("dotenv").config();
 const app = express();
 
 /* ==============================
-   CORS CONFIGURATION (FINAL FIX)
+   SIMPLE & SAFE CORS
 ================================= */
 app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: false
 }));
-
-app.options("*", cors());
 
 app.use(express.json());
 
