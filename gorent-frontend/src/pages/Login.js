@@ -54,30 +54,49 @@ function Login() {
         }
       });
 
-      console.log("Login response:", res.data);
+      // Debug: Log full response structure for debugging
+      console.log("Login response structure:", {
+        resData: res.data,
+        hasData: !!res.data.data,
+        hasToken: !!res.data.token,
+        hasSuccess: res.data.success
+      });
 
-      // Handle new response format
-      const responseData = res.data.data || res.data;
+      // Extract token and user data from correct response structure
+      // Backend format: { success: true, message: "...", token: "...", data: { id, name, email, role } }
+      const { success, token, data: userData, message } = res.data;
+
+      // Check if login was successful
+      if (!success) {
+        setError(message || "Login failed");
+        return;
+      }
+
+      // Validate token exists
+      if (!token) {
+        console.error("Login response missing token:", res.data);
+        setError("Login failed: No token received from server");
+        return;
+      }
+
+      // Save token to localStorage
+      localStorage.setItem("token", token);
       
-      if (responseData.token) {
-        localStorage.setItem("token", responseData.token);
-        localStorage.setItem("user", JSON.stringify({
-          id: responseData.id,
-          name: responseData.name,
-          email: responseData.email,
-          role: responseData.role
-        }));
+      // Save user data to localStorage
+      localStorage.setItem("user", JSON.stringify({
+        id: userData?.id,
+        name: userData?.name,
+        email: userData?.email,
+        role: userData?.role
+      }));
 
-        addToast("Login successful!", "success");
-        
-        // Redirect based on role
-        if (responseData.role === "admin") {
-          navigate("/admin");
-        } else {
-          navigate("/dashboard");
-        }
+      addToast("Login successful!", "success");
+      
+      // Redirect based on role
+      if (userData?.role === "admin") {
+        navigate("/admin");
       } else {
-        setError("Login failed: No token received");
+        navigate("/dashboard");
       }
     } catch (err) {
       console.error("Login error:", err.response || err);
