@@ -9,6 +9,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Serve uploaded vehicle images
+app.use("/uploads/vehicles", express.static("uploads/vehicles"));
+
 // Connect to MongoDB
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/gorent";
 const PORT = process.env.PORT || 5000;

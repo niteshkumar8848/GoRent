@@ -6,6 +6,19 @@ import "react-datepicker/dist/react-datepicker.css";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+// Helper function to get full image URL
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
+  if (imagePath.startsWith("http")) return imagePath;
+  // If it's a local path starting with /uploads, prepend the server base URL
+  if (imagePath.startsWith("/uploads")) {
+    return "http://localhost:5000" + imagePath;
+  }
+  // Fallback: prepend API base URL
+  return API_URL.replace("/api", "") + imagePath;
+};
+
 function Home() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +181,7 @@ function Home() {
                 {vehicles.map(vehicle => (
                   <div key={vehicle._id} className="vehicle-card">
                     <img
-                      src={vehicle.image || "https://via.placeholder.com/300x200?text=No+Image"}
+                      src={getImageUrl(vehicle.image) || "https://via.placeholder.com/300x200?text=No+Image"}
                       alt={vehicle.name}
                       className="vehicle-image"
                     />

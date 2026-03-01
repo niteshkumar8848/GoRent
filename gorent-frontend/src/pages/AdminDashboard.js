@@ -3,6 +3,19 @@ import axios from "axios";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+// Helper function to get full image URL
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
+  if (imagePath.startsWith("http")) return imagePath;
+  // If it's a local path starting with /uploads, prepend the server base URL
+  if (imagePath.startsWith("/uploads")) {
+    return "http://localhost:5000" + imagePath;
+  }
+  // Fallback: prepend API base URL
+  return API_URL.replace("/api", "") + imagePath;
+};
+
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("bookings");
   const [bookings, setBookings] = useState([]);
@@ -19,6 +32,9 @@ function AdminDashboard() {
     pricePerDay: "",
     available: true
   });
+  const [vehicleImage, setVehicleImage] = useState(null);
+  const [existingImage, setExistingImage] = useState("");
+  const [imagePreview, setImagePreview] = useState("");
   const [vehicleLoading, setVehicleLoading] = useState(false);
 
   const token = localStorage.getItem("token");
@@ -80,21 +96,36 @@ function AdminDashboard() {
     try {
       setVehicleLoading(true);
       
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append("name", vehicleForm.name);
+      formData.append("brand", vehicleForm.brand);
+      formData.append("pricePerDay", vehicleForm.pricePerDay);
+      formData.append("available", vehicleForm.available);
+      
+      // Append image if selected
+      if (vehicleImage) {
+        formData.append("image", vehicleImage);
+      }
+      
       if (editingVehicle) {
         await axios.put(
           `${API_URL}/vehicles/${editingVehicle._id}`,
-          vehicleForm,
+          formData,
           config
         );
         alert("Vehicle updated successfully");
       } else {
-        await axios.post(`${API_URL}/vehicles`, vehicleForm, config);
+        await axios.post(`${API_URL}/vehicles`, formData, config);
         alert("Vehicle added successfully");
       }
       
       setShowVehicleForm(false);
       setEditingVehicle(null);
       setVehicleForm({ name: "", brand: "", pricePerDay: "", available: true });
+      setVehicleImage(null);
+      setExistingImage("");
+      setImagePreview("");
       fetchVehicles();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save vehicle");
@@ -111,7 +142,32 @@ function AdminDashboard() {
       pricePerDay: vehicle.pricePerDay,
       available: vehicle.available
     });
+    // Use full URL for existing image preview
+    setExistingImage(getImageUrl(vehicle.image) || "");
+    setImagePreview(getImageUrl(vehicle.image) || "");
+    setVehicleImage(null);
     setShowVehicleForm(true);
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setVehicleImage(file);
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const resetVehicleForm = () => {
+    setVehicleForm({ name: "", brand: "", pricePerDay: "", available: true });
+    setVehicleImage(null);
+    setExistingImage("");
+    setImagePreview("");
+    setEditingVehicle(null);
   };
 
   const handleDeleteVehicle = async (vehicleId) => {
@@ -284,7 +340,7 @@ function AdminDashboard() {
                 onClick={() => {
                   setShowVehicleForm(true);
                   setEditingVehicle(null);
-                  setVehicleForm({ name: "", brand: "", pricePerDay: "", available: true });
+                  resetVehicleForm();
                 }}
               >
                 Add Vehicle
@@ -296,7 +352,7 @@ function AdminDashboard() {
                 {vehicles.map(vehicle => (
                   <div key={vehicle._id} className="vehicle-card">
                     <img
-                      src={vehicle.image || "https://via.placeholder.com/300x200?text=No+Image"}
+                      src={getImageUrl(vehicle.image) || "https://via.placeholder.com/300x200?text=No+Image"}
                       alt={vehicle.name}
                       className="vehicle-image"
                     />
@@ -349,7 +405,7 @@ function AdminDashboard() {
 
         {/* Vehicle Form Modal */}
         {showVehicleForm && (
-          <div className="modal-overlay" onClick={() => setShowVehicleForm(false)}>
+          <div className="modal-overlay" onClick={() => { setShowVehicleForm(false); resetVehicleForm(); }}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2 className="modal-title">
@@ -398,6 +454,25 @@ function AdminDashboard() {
                       onChange={(e) => setVehicleForm({ ...vehicleForm, pricePerDay: e.target.value })}
                       required
                     />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label className="form-label">Vehicle Image</label>
+                    <input
+                      type="file"
+                      className="form-input"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                    />
+                    {imagePreview && (
+                      <div style={{ marginTop: "10px" }}>
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "8px" }}
+                        />
+                      </div>
+                    )}
                   </div>
                   
                   <div className="form-group">

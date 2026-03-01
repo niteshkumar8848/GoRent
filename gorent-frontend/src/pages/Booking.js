@@ -3,6 +3,19 @@ import axios from "axios";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+// Helper function to get full image URL
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
+  if (imagePath.startsWith("http")) return imagePath;
+  // If it's a local path starting with /uploads, prepend the server base URL
+  if (imagePath.startsWith("/uploads")) {
+    return "http://localhost:5000" + imagePath;
+  }
+  // Fallback: prepend API base URL
+  return API_URL.replace("/api", "") + imagePath;
+};
+
 function Bookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,13 +109,22 @@ function Bookings() {
             {bookings.map(booking => (
               <div key={booking._id} className="booking-card">
                 <div className="booking-header">
-                  <div>
-                    <h3 className="booking-vehicle">
-                      {booking.vehicle?.name || "Vehicle"}
-                    </h3>
-                    <p className="vehicle-brand">
-                      {booking.vehicle?.brand || ""}
-                    </p>
+                  <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                    {booking.vehicle?.image && (
+                      <img 
+                        src={getImageUrl(booking.vehicle.image)} 
+                        alt={booking.vehicle.name}
+                        style={{ width: "80px", height: "60px", objectFit: "cover", borderRadius: "8px" }}
+                      />
+                    )}
+                    <div>
+                      <h3 className="booking-vehicle">
+                        {booking.vehicle?.name || "Vehicle"}
+                      </h3>
+                      <p className="vehicle-brand">
+                        {booking.vehicle?.brand || ""}
+                      </p>
+                    </div>
                   </div>
                   <span className={`booking-status ${getStatusClass(booking.status)}`}>
                     {booking.status}

@@ -3,9 +3,43 @@ const Vehicle = require("../models/Vehicle");
 const auth = require("../middleware/authMiddleware");
 const admin = require("../middleware/adminMiddleware");
 const multer = require("multer");
-const { imagekit, isImageKitConfigured } = require("../utils/imagekit");
+const path = require("path");
+const fs = require("fs");
 
-const upload = multer({ storage: multer.memoryStorage() });
+// Configure multer for local file storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = "uploads/vehicles";
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename: vehicle_timestamp.extension
+    const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, "vehicle_" + uniqueSuffix + ext);
+  }
+});
+
+// Filter to only allow image files
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only image files are allowed!"), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 // Get all vehicles with search and filter
 router.get("/", async (req, res) => {
@@ -64,13 +98,10 @@ router.post("/", auth, admin, upload.single("image"), async (req, res) => {
 
     let imageUrl = "";
     
-    // Only upload to ImageKit if it's configured
-    if (req.file && imagekit) {
-      const uploadResponse = await imagekit.upload({
-        file: req.file.buffer,
-        fileName: req.file.originalname
-      });
-      imageUrl = uploadResponse.url;
+    // Save image locally if uploaded
+    if (req.file) {
+      // Create URL path for the uploaded file
+      imageUrl = `/uploads/vehicles/${req.file.filename}`;
     }
 
     const vehicle = new Vehicle({
@@ -103,15 +134,20 @@ router.put("/:id", auth, admin, upload.single("image"), async (req, res) => {
     if (name) vehicle.name = name;
     if (brand) vehicle.brand = brand;
     if (pricePerDay) vehicle.pricePerDay = parseInt(pricePerDay);
-    if (available !== undefined) vehicle.available = available === true || available === "true";
+    if (available !== undefined) vehicle.available = available === true || available === "true" || available === "on";
 
-    // Handle image update only if ImageKit is configured
-    if (req.file && imagekit) {
-      const uploadResponse = await imagekit.upload({
-        file: req.file.buffer,
-        fileName: req.file.originalname
-      });
-      vehicle.image = uploadResponse.url;
+    // Handle image update - save locally
+    if (req.file) {
+      // Delete old image if exists
+      if (vehicle.image) {
+        // Remove leading slash for path join
+        const oldImagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
+      }
+      // Save new image path
+      vehicle.image = `/uploads/vehicles/${req.file.filename}`;
     }
 
     await vehicle.save();
@@ -128,6 +164,15 @@ router.delete("/:id", auth, admin, async (req, res) => {
     const vehicle = await Vehicle.findById(req.params.id);
     if (!vehicle) {
       return res.status(404).json({ message: "Vehicle not found" });
+    }
+
+    // Delete associated image file if exists
+    if (vehicle.image) {
+      // Remove leading slash for path join
+      const imagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
     }
 
     await vehicle.deleteOne();
