@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useToast } from "../components/Toast";
+import { useConfirmDialog } from "../components/ConfirmDialog";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -24,6 +25,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { addToast } = useToast();
+  const { confirm } = useConfirmDialog();
   
   // Admin profile state
   const [adminProfile, setAdminProfile] = useState(null);
@@ -55,43 +57,77 @@ function AdminDashboard() {
   };
 
   useEffect(() => {
-    fetchData();
+    // Initial fetch with loading indicator
+    fetchData(true);
+    
+    // Poll for updates every 5 seconds WITHOUT loading indicator
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (showLoading = true) => {
     try {
-      setLoading(true);
-      await Promise.all([fetchBookings(), fetchVehicles(), fetchAdminProfile()]);
+      if (showLoading) {
+        setLoading(true);
+      }
+      await Promise.all([fetchBookings(showLoading), fetchVehicles(showLoading), fetchAdminProfile(showLoading)]);
     } catch (err) {
-      setError("Failed to load data");
+      if (showLoading) {
+        setError("Failed to load data");
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
-  const fetchAdminProfile = async () => {
+  const fetchAdminProfile = async (showLoading = true) => {
     try {
       const res = await axios.get(`${API_URL}/auth/me`, config);
-      setAdminProfile(res.data);
-      setProfileForm(prev => ({ ...prev, email: res.data.email || "" }));
+      setAdminProfile(prev => {
+        // Only update if data changed
+        if (JSON.stringify(prev) !== JSON.stringify(res.data)) {
+          return res.data;
+        }
+        return prev;
+      });
+      if (showLoading || !adminProfile) {
+        setProfileForm(prev => ({ ...prev, email: res.data.email || "" }));
+      }
     } catch (err) {
       console.error("Failed to fetch admin profile");
     }
   };
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (showLoading = true) => {
     try {
       const res = await axios.get(`${API_URL}/bookings/all`, config);
-      setBookings(res.data);
+      setBookings(prev => {
+        // Only update if data changed
+        if (JSON.stringify(prev) !== JSON.stringify(res.data)) {
+          return res.data;
+        }
+        return prev;
+      });
     } catch (err) {
       console.error("Failed to fetch bookings");
     }
   };
 
-  const fetchVehicles = async () => {
+  const fetchVehicles = async (showLoading = true) => {
     try {
       const res = await axios.get(`${API_URL}/vehicles`);
-      setVehicles(res.data);
+      setVehicles(prev => {
+        // Only update if data changed
+        if (JSON.stringify(prev) !== JSON.stringify(res.data)) {
+          return res.data;
+        }
+        return prev;
+      });
     } catch (err) {
       console.error("Failed to fetch vehicles");
     }
@@ -202,17 +238,15 @@ function AdminDashboard() {
   };
 
   const handleDeleteVehicle = async (vehicleId) => {
-    if (!window.confirm("Are you sure you want to delete this vehicle?")) {
-      return;
-    }
-    
-    try {
-      await axios.delete(`${API_URL}/vehicles/${vehicleId}`, config);
-      fetchVehicles();
-      addToast("Vehicle deleted successfully", "success");
-    } catch (err) {
-      addToast(err.response?.data?.message || "Failed to delete vehicle", "error");
-    }
+    confirm("Are you sure you want to delete this vehicle?", async () => {
+      try {
+        await axios.delete(`${API_URL}/vehicles/${vehicleId}`, config);
+        fetchVehicles();
+        addToast("Vehicle deleted successfully", "success");
+      } catch (err) {
+        addToast(err.response?.data?.message || "Failed to delete vehicle", "error");
+      }
+    });
   };
 
   const toggleVehicleAvailability = async (vehicle) => {

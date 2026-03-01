@@ -877,3 +877,49 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Confirm Dialog */
+.confirm-dialog {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-lg);
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.confirm-dialog-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.confirm-dialog-message {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--dark-color);
+  margin-bottom: 1.5rem;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.confirm-dialog-actions .btn {
+  flex: 1;
+  max-width: 140px;
+}
+

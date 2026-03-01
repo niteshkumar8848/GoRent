@@ -41,32 +41,46 @@ function Home() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  // Fetch vehicles
-  const fetchVehicles = async () => {
+  // Fetch vehicles - with option to skip loading indicator
+  const fetchVehicles = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (maxPrice) params.append("maxPrice", maxPrice);
       if (brand) params.append("brand", brand);
 
       const res = await axios.get(`${API_URL}/vehicles?${params}`);
-      setVehicles(res.data);
+      
+      // Only update state if data has changed (for smooth updates)
+      setVehicles(prevVehicles => {
+        const newVehicles = res.data;
+        // Compare and only update if there are actual changes
+        if (JSON.stringify(prevVehicles) !== JSON.stringify(newVehicles)) {
+          return newVehicles;
+        }
+        return prevVehicles;
+      });
       setError("");
     } catch (err) {
       setError("Failed to load vehicles");
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchVehicles();
+    // Initial fetch with loading indicator
+    fetchVehicles(true);
     
-    // Poll for vehicle updates every 5 seconds to keep status current
+    // Poll for vehicle updates every 5 seconds WITHOUT loading indicator
     const interval = setInterval(() => {
-      fetchVehicles();
+      fetchVehicles(false);
     }, 5000);
     
     return () => clearInterval(interval);

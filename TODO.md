@@ -14,6 +14,9 @@
 11. [x] Frontend: Create UserDashboard component for regular users
 12. [x] Frontend: Add route for UserDashboard in App.js
 13. [x] Frontend: Add "My Dashboard" link in Navbar for regular users
+14. [x] Fix UI flickering - use silent polling with data comparison
+15. [x] Replace window.confirm with custom ConfirmDialog component
+16. [x] Add CSS styles for ConfirmDialog
 
 ## Implementation Steps:
 - ✅ Step 1: Update authRoutes.js to add admin profile update endpoint
@@ -27,4 +30,10 @@
 - ✅ Step 9: Create UserDashboard component
 - ✅ Step 10: Add Dashboard route in App.js
 - ✅ Step 11: Add My Dashboard link in Navbar
+- ✅ Step 12: Fix flickering - add showLoading param and data comparison
+- ✅ Step 13: Create ConfirmDialog component
+- ✅ Step 14: Update App.js to include ConfirmDialogProvider
+- ✅ Step 15: Add CSS for ConfirmDialog
+- ✅ Step 16: Replace window.confirm in Booking.js
+- ✅ Step 17: Replace window.confirm in AdminDashboard.js
 

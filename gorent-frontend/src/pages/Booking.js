@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useToast } from "../components/Toast";
+import { useConfirmDialog } from "../components/ConfirmDialog";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -23,60 +24,72 @@ function Bookings() {
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(null);
   const { addToast } = useToast();
+  const { confirm } = useConfirmDialog();
 
   useEffect(() => {
-    fetchBookings();
+    // Initial fetch with loading indicator
+    fetchBookings(true);
     
-    // Poll for booking updates every 5 seconds
+    // Poll for booking updates every 5 seconds WITHOUT loading indicator
     const interval = setInterval(() => {
-      fetchBookings();
+      fetchBookings(false);
     }, 5000);
     
     return () => clearInterval(interval);
   }, []);
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       const token = localStorage.getItem("token");
       
       const res = await axios.get(`${API_URL}/bookings`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setBookings(res.data);
+      // Only update state if data has changed (for smooth updates)
+      setBookings(prevBookings => {
+        const newBookings = res.data;
+        // Compare and only update if there are actual changes
+        if (JSON.stringify(prevBookings) !== JSON.stringify(newBookings)) {
+          return newBookings;
+        }
+        return prevBookings;
+      });
       setError("");
     } catch (err) {
       setError("Failed to load bookings");
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   const handleCancel = async (bookingId) => {
-    if (!window.confirm("Are you sure you want to cancel this booking?")) {
-      return;
-    }
-
-    try {
-      setCancelling(bookingId);
-      const token = localStorage.getItem("token");
-      
-      await axios.put(
-        `${API_URL}/bookings/${bookingId}/cancel`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Refresh bookings
-      fetchBookings();
-      addToast("Booking cancelled successfully", "success");
-    } catch (err) {
-      addToast(err.response?.data?.message || "Failed to cancel booking", "error");
-    } finally {
-      setCancelling(null);
-    }
+    confirm("Are you sure you want to cancel this booking?", async () => {
+      try {
+        setCancelling(bookingId);
+        const token = localStorage.getItem("token");
+        
+        await axios.put(
+          `${API_URL}/bookings/${bookingId}/cancel`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        // Refresh bookings
+        fetchBookings();
+        addToast("Booking cancelled successfully", "success");
+      } catch (err) {
+        addToast(err.response?.data?.message || "Failed to cancel booking", "error");
+      } finally {
+        setCancelling(null);
+      }
+    });
   };
 
   const getStatusClass = (status) => {
