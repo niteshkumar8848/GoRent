@@ -1,146 +1,122 @@
-# GoRent Deployment Checklist - COMPLETE GUIDE
+# GoRent - Complete Setup Guide
 
-## ⚠️ STEP 0: MongoDB Atlas Setup (MUST DO FIRST)
+## Default Admin Credentials
 
-Before deploying, you MUST add Render's IP to MongoDB Atlas:
+**Admin Account:**
+- **Email:** admin@gorent.com
+- **Password:** admin123
+- **Role:** admin
 
-1. Go to [MongoDB Atlas](https://cloud.mongodb.com/)
+To create the admin account, you need to run the seed script:
+
+### Option 1: Run seed script locally
+```bash
+cd gorent-backend
+node seedAdmin.js
+```
+
+### Option 2: Auto-create admin on server start
+The admin will be created automatically when the server starts if it doesn't exist.
+
+---
+
+## Complete Deployment Steps
+
+### Step 1: MongoDB Atlas Setup (CRITICAL)
+1. Go to https://cloud.mongodb.com/
 2. Select your project → Click **"Network Access"**
 3. Click **"Add IP Address"**
 4. Select **"Allow Access from Anywhere"** (0.0.0.0/0)
-5. Click **Confirm**
+5. Click Confirm
+6. Wait 2 minutes
 
-Wait 1-2 minutes for changes to take effect.
+### Step 2: Deploy Backend to Render
+1. Create Web Service on Render
+2. Environment Variables:
+   - `MONGO_URI` = your MongoDB Atlas connection string
+   - `JWT_SECRET` = any random 32+ character string (e.g., `abc123xyz789def456ghi789jkl012mno345pqr`)
+   - `PORT` = 10000
+   - `NODE_ENV` = production
 
-This is the #1 cause of deployment failures!
+### Step 3: Deploy Frontend to Render
+1. Create Static Site on Render
+2. Environment Variable:
+   - `REACT_APP_API_URL` = https://your-backend.onrender.com/api
 
----
+### Step 4: Create Admin Account
+After deployment, visit your backend URL to auto-create the admin:
+- The admin account (admin@gorent.com / admin123) will be created automatically
 
-## STEP 1: Backend Deployment (Render)
-
-### 1. Create Web Service
-1. Go to [Render Dashboard](https://dashboard.render.com/)
-2. Click "New" → "Web Service"
-3. Connect your GitHub repository
-4. Configure:
-   - **Name**: gorent-backend
-   - **Environment**: Node
-   - **Build Command**: `npm install`
-   - **Start Command**: `node server.js`
-   - **Instance Type**: Free
-
-### 2. Environment Variables
-Add these in the Render dashboard:
-
-| Variable | Value |
-|----------|-------|
-| MONGO_URI | `mongodb+srv://username:password@cluster.mongodb.net/gorent` |
-| JWT_SECRET | Any random string (minimum 32 characters) |
-| PORT | 10000 |
-| NODE_ENV | production |
-
-### 3. Deploy
-- Click "Create Web Service"
-- Wait 2-3 minutes for deployment
-- Check logs - you should see:
-  - `GoRent Server Running Successfully`
-  - `MongoDB Connected`
-
----
-
-## STEP 2: Frontend Deployment (Render)
-
-### 1. Create Static Site
-1. Go to [Render Dashboard](https://dashboard.render.com/)
-2. Click "New" → "Static Site"
-3. Connect your GitHub repository
-4. Configure:
-   - **Name**: gorent-frontend
-   - **Build Command**: `npm run build`
-   - **Publish directory**: `build`
-
-### 2. Environment Variables
-Add these:
-
-| Variable | Value |
-|----------|-------|
-| REACT_APP_API_URL | `https://gorent-backend.onrender.com/api` |
-
-**IMPORTANT**: Replace `gorent-backend` with your actual backend service name!
-
-### 3. Deploy
-- Click "Create Static Site"
-- Wait for deployment
-
----
-
-## STEP 3: Verify Deployment
-
-### Test Backend Health
-Visit: `https://your-backend.onrender.com/api/health`
-
-Expected response:
-```json
-{
-  "status": "ok",
-  "message": "GoRent API is running",
-  "mongodb": "connected",
-  "server": "running"
-}
+Or run locally:
+```bash
+cd gorent-backend
+node seedAdmin.js
 ```
 
-### Test Frontend
-Visit: `https://your-frontend.onrender.com`
+---
+
+## Testing the Application
+
+### Test Registration:
+1. Go to frontend URL
+2. Click Register
+3. Fill in details and register
+4. Should redirect to dashboard
+
+### Test Login:
+1. Go to Login page
+2. Use admin credentials:
+   - Email: admin@gorent.com
+   - Password: admin123
+3. Should redirect to /admin
+
+### Test Regular User:
+1. Register a new user
+2. Login with that user
+3. Should redirect to /dashboard (not /admin)
 
 ---
 
-## TROUBLESHOOTING
+## Troubleshooting
 
-### Issue: "MongoDB Connection Error"
-**Solution:**
-- You did NOT add IP to MongoDB Atlas! Go back to STEP 0
-- Or wait 2-3 minutes for IP whitelist to take effect
-
-### Issue: 502 Bad Gateway
-**Solution:**
-- Check backend logs in Render dashboard
-- Ensure MONGO_URI is correct
-- Ensure JWT_SECRET is set
-
-### Issue: CORS Errors
-**Solution:**
-- The server now automatically allows `.onrender.com` domains
-- No additional CORS config needed
-
-### Issue: Server Not Responding
-**Solution:**
+### "Server not responding" error:
 - Check if backend is deployed
-- Check if environment variables are set correctly
+- Check environment variables in Render
+- Check backend logs in Render dashboard
+
+### "Invalid credentials" error:
+- Make sure MongoDB is connected
+- Check JWT_SECRET is set
 - Check backend logs for errors
 
----
-
-## Common Deployment Values
-
-| Service | Example URL |
-|---------|-------------|
-| Backend | `https://gorent-backend.onrender.com` |
-| Frontend | `https://gorent-frontend.onrender.com` |
-| API | `https://gorent-backend.onrender.com/api` |
+### "Database not available":
+- MongoDB Atlas IP whitelist not configured - go back to Step 1
 
 ---
 
-## Quick Checklist
+## Environment Variables Summary
 
-- [ ] MongoDB Atlas: Added IP 0.0.0.0/0 to Network Access
-- [ ] Backend: Deployed to Render
-- [ ] Backend: MONGO_URI set
-- [ ] Backend: JWT_SECRET set  
-- [ ] Backend: PORT = 10000
-- [ ] Backend: NODE_ENV = production
-- [ ] Frontend: Deployed to Render
-- [ ] Frontend: REACT_APP_API_URL set to backend URL
-- [ ] Health check returns "ok"
-- [ ] Can register/login
-- [ ] Can view vehicles
+| Variable | Backend Required | Frontend Required |
+|----------|-----------------|------------------|
+| MONGO_URI | ✅ Yes | ❌ No |
+| JWT_SECRET | ✅ Yes | ❌ No |
+| PORT | ✅ Yes (10000) | ❌ No |
+| NODE_ENV | ✅ Yes (production) | ❌ No |
+| REACT_APP_API_URL | ❌ No | ✅ Yes |
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| /api/health | GET | No | Health check |
+| /api/auth/register | POST | No | Register user |
+| /api/auth/login | POST | No | Login user |
+| /api/auth/me | GET | Yes | Get profile |
+| /api/vehicles | GET | No | Get all vehicles |
+| /api/vehicles | POST | Admin | Add vehicle |
+| /api/bookings | POST | Yes | Create booking |
+| /api/bookings | GET | Yes | Get user bookings |
+| /api/bookings/all | GET | Admin | Get all bookings |
 

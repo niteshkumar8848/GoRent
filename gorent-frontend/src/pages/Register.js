@@ -54,13 +54,20 @@ function Register() {
     setError("");
 
     try {
+      console.log("Attempting registration to:", API_URL);
+      
       const res = await axios.post(`${API_URL}/auth/register`, {
-        name: formData.name,
-        email: formData.email,
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
         password: formData.password
       }, {
-        timeout: 10000
+        timeout: 15000,
+        headers: {
+          "Content-Type": "application/json"
+        }
       });
+
+      console.log("Registration response:", res.data);
 
       // Handle new response format
       const responseData = res.data.data || res.data;
@@ -76,15 +83,22 @@ function Register() {
 
         addToast("Registration successful!", "success");
         navigate("/dashboard");
+      } else {
+        setError("Registration failed: No token received");
       }
     } catch (err) {
-      console.error("Registration error:", err);
+      console.error("Registration error:", err.response || err);
       
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err.code === "ECONNABORTED") {
-        setError("Request timeout. Please try again.");
+      // Handle different error scenarios
+      if (err.response) {
+        // Server responded with error
+        const message = err.response.data?.message || err.response.data?.error || "Registration failed";
+        setError(message);
+      } else if (err.request) {
+        // Request made but no response
+        setError("Server not responding. Please check your connection.");
       } else {
+        // Something else went wrong
         setError("Registration failed. Please try again.");
       }
     } finally {

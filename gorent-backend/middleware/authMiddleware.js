@@ -1,13 +1,9 @@
 const jwt = require("jsonwebtoken");
 
-// Check if JWT_SECRET is available
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  console.error("FATAL: JWT_SECRET is not defined in environment variables");
-}
-
 module.exports = function (req, res, next) {
+  // Get JWT_SECRET dynamically (not at module load time)
+  const JWT_SECRET = process.env.JWT_SECRET;
+  
   // Get token from header
   const authHeader = req.header("Authorization");
 
@@ -19,19 +15,20 @@ module.exports = function (req, res, next) {
     });
   }
 
+  // Check if JWT_SECRET is configured
+  if (!JWT_SECRET) {
+    console.error("JWT_SECRET is not configured!");
+    return res.status(500).json({
+      success: false,
+      message: "Server configuration error - JWT_SECRET not set"
+    });
+  }
+
   try {
     // Remove "Bearer " prefix if present
     const tokenString = authHeader.startsWith("Bearer ") 
       ? authHeader.slice(7, authHeader.length) 
       : authHeader;
-    
-    // Check if JWT_SECRET exists
-    if (!JWT_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message: "Server configuration error - JWT_SECRET not set"
-      });
-    }
     
     // Verify token
     const verified = jwt.verify(tokenString, JWT_SECRET);

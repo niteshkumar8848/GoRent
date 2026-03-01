@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
 const app = express();
@@ -26,24 +27,19 @@ if (!JWT_SECRET) {
 ================================= */
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow all origins in development, or if no origin provided
-    // In production, this still allows Render domains
     if (NODE_ENV !== "production" || !origin) {
       return callback(null, true);
     }
     
-    // Allow any Render domain
     if (origin.includes(".onrender.com") || origin.includes("render.com")) {
       return callback(null, true);
     }
     
-    // Allow explicitly configured origins
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(o => o.trim());
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     
-    // For now, allow all in production too to prevent issues
     callback(null, true);
   },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -69,6 +65,15 @@ app.use("/uploads", express.static("uploads"));
 ================================= */
 let isConnected = false;
 
+// User Model (defined locally to avoid import issues)
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
+  role: { type: String, default: "user" }
+});
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+
 const connectDB = async (retries = 5, delay = 5000) => {
   if (!MONGO_URI) {
     console.warn("⚠️ MONGO_URI not configured - running without database");
@@ -87,6 +92,10 @@ const connectDB = async (retries = 5, delay = 5000) => {
       
       console.log("✅ MongoDB Connected Successfully");
       isConnected = true;
+      
+      // Try to create admin user
+      await createDefaultAdmin();
+      
       return true;
     } catch (error) {
       console.error(`❌ MongoDB Connection Failed (attempt ${attempt}): ${error.message}`);
@@ -99,12 +108,34 @@ const connectDB = async (retries = 5, delay = 5000) => {
   }
   
   console.error("⚠️ Could not connect to MongoDB after all retries");
-  console.error("The server will start but database operations will fail");
   return false;
 };
 
-// Start connection attempt (don't await - let it run in background)
-connectDB();
+// Create default admin user
+const createDefaultAdmin = async () => {
+  try {
+    const adminEmail = "admin@gorent.com";
+    const existingAdmin = await User.findOne({ email: adminEmail });
+    
+    if (!existingAdmin) {
+      const hashedPassword = await bcrypt.hash("admin123", 10);
+      const admin = new User({
+        name: "Admin",
+        email: adminEmail,
+        password: hashedPassword,
+        role: "admin"
+      });
+      await admin.save();
+      console.log("✅ Default admin user created!");
+      console.log("   Email: admin@gorent.com");
+      console.log("   Password: admin123");
+    } else {
+      console.log("✅ Admin user already exists");
+    }
+  } catch (error) {
+    console.error("⚠️ Could not create admin user:", error.message);
+  }
+};
 
 // Handle mongoose connection events
 mongoose.connection.on("connected", () => {
@@ -120,8 +151,6 @@ mongoose.connection.on("error", (err) => {
 mongoose.connection.on("disconnected", () => {
   console.warn("⚠️ MongoDB Disconnected");
   isConnected = false;
-  // Try to reconnect
-  connectDB();
 });
 
 /* ==============================
@@ -137,8 +166,7 @@ app.get("/api/health", (req, res) => {
     server: "running"
   };
   
-  const statusCode = isConnected ? 200 : 200; // Still return 200 for health check
-  res.status(statusCode).json(healthStatus);
+  res.status(200).json(healthStatus);
 });
 
 /* ==============================
@@ -165,7 +193,6 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(`❌ Error: ${err.message}`);
   
-  // Handle specific error types
   if (err.name === "ValidationError") {
     return res.status(400).json({
       success: false,
@@ -247,6 +274,9 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 ║  API: http://localhost:${PORT}/api
 ╚═══════════════════════════════════════════════════════════╝
   `);
+  
+  // Start MongoDB connection in background
+  connectDB();
 });
 
 module.exports = app;

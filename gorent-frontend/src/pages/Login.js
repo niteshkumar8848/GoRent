@@ -42,9 +42,19 @@ function Login() {
     setError("");
 
     try {
-      const res = await axios.post(`${API_URL}/auth/login`, formData, {
-        timeout: 10000
+      console.log("Attempting login to:", API_URL);
+      
+      const res = await axios.post(`${API_URL}/auth/login`, {
+        email: formData.email.trim(),
+        password: formData.password
+      }, {
+        timeout: 15000,
+        headers: {
+          "Content-Type": "application/json"
+        }
       });
+
+      console.log("Login response:", res.data);
 
       // Handle new response format
       const responseData = res.data.data || res.data;
@@ -66,16 +76,23 @@ function Login() {
         } else {
           navigate("/dashboard");
         }
+      } else {
+        setError("Login failed: No token received");
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Login error:", err.response || err);
       
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err.code === "ECONNABORTED") {
-        setError("Request timeout. Please try again.");
+      // Handle different error scenarios
+      if (err.response) {
+        // Server responded with error
+        const message = err.response.data?.message || err.response.data?.error || "Login failed";
+        setError(message);
+      } else if (err.request) {
+        // Request made but no response
+        setError("Server not responding. Please check your connection.");
       } else {
-        setError("Login failed. Please check your credentials.");
+        // Something else went wrong
+        setError("Login failed. Please try again.");
       }
     } finally {
       setLoading(false);
