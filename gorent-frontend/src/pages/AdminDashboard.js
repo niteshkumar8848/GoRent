@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api, { API_URL } from "../api/axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
-
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Get the base URL (without /api)
 const BASE_URL = API_URL.replace("/api", "");
@@ -55,12 +53,6 @@ function AdminDashboard() {
   const [imagePreview, setImagePreview] = useState("");
   const [vehicleLoading, setVehicleLoading] = useState(false);
 
-  const token = localStorage.getItem("token");
-  const config = {
-    headers: { Authorization: `Bearer ${token}` },
-    timeout: 10000 // 10 second timeout
-  };
-
   useEffect(() => {
     // Initial fetch with loading indicator
     fetchData(true);
@@ -95,7 +87,7 @@ function AdminDashboard() {
 
   const fetchAdminProfile = async (showLoading = true) => {
     try {
-      const res = await axios.get(`${API_URL}/auth/me`, config);
+      const res = await api.get("/auth/me");
       
       // Handle both old and new response formats
       const userData = res.data.data || res.data;
@@ -122,7 +114,7 @@ function AdminDashboard() {
 
   const fetchBookings = async (showLoading = true) => {
     try {
-      const res = await axios.get(`${API_URL}/bookings/all`, config);
+      const res = await api.get("/bookings/all");
       
       // Handle both old format (array) and new format ({success, data})
       let bookingData = [];
@@ -146,7 +138,7 @@ function AdminDashboard() {
 
   const fetchVehicles = async (showLoading = true) => {
     try {
-      const res = await axios.get(`${API_URL}/vehicles`);
+      const res = await api.get("/vehicles");
       
       // Handle both old format (array) and new format ({success, data})
       let vehicleData = [];
@@ -178,11 +170,7 @@ function AdminDashboard() {
     setBookings(updatedBookings);
     
     try {
-      const res = await axios.put(
-        `${API_URL}/bookings/${bookingId}/status`,
-        { status },
-        config
-      );
+      const res = await api.put(`/bookings/${bookingId}/status`, { status });
       // Success
       addToast(res.data?.message || `Booking ${status} successfully`, "success");
     } catch (err) {
@@ -211,14 +199,10 @@ function AdminDashboard() {
       }
       
       if (editingVehicle) {
-        await axios.put(
-          `${API_URL}/vehicles/${editingVehicle._id}`,
-          formData,
-          config
-        );
+        await api.put(`/vehicles/${editingVehicle._id}`, formData);
         addToast("Vehicle updated successfully", "success");
       } else {
-        await axios.post(`${API_URL}/vehicles`, formData, config);
+        await api.post("/vehicles", formData);
         addToast("Vehicle added successfully", "success");
       }
       
@@ -275,7 +259,7 @@ function AdminDashboard() {
   const handleDeleteVehicle = async (vehicleId) => {
     confirm("Are you sure you want to delete this vehicle?", async () => {
       try {
-        await axios.delete(`${API_URL}/vehicles/${vehicleId}`, config);
+        await api.delete(`/vehicles/${vehicleId}`);
         fetchVehicles();
         addToast("Vehicle deleted successfully", "success");
       } catch (err) {
@@ -293,11 +277,7 @@ function AdminDashboard() {
     setVehicles(updatedVehicles);
     
     try {
-      await axios.put(
-        `${API_URL}/vehicles/${vehicle._id}`,
-        { available: !vehicle.available },
-        config
-      );
+      await api.put(`/vehicles/${vehicle._id}`, { available: !vehicle.available });
       // No need to refetch, UI is already updated
     } catch (err) {
       // Revert on error
@@ -334,7 +314,7 @@ function AdminDashboard() {
         newPassword: profileForm.newPassword
       };
 
-      const res = await axios.put(`${API_URL}/auth/admin-profile`, updateData, config);
+      const res = await api.put("/auth/admin-profile", updateData);
       
       addToast(res.data?.message || "Profile updated successfully", "success");
       
@@ -347,8 +327,8 @@ function AdminDashboard() {
       }));
       
       // Update localStorage with new user info
-      if (res.data.user) {
-        localStorage.setItem("user", JSON.stringify(res.data.user));
+      if (res.data.data) {
+        localStorage.setItem("user", JSON.stringify(res.data.data));
       }
       
       // Refresh admin profile
@@ -784,4 +764,3 @@ function AdminDashboard() {
 }
 
 export default AdminDashboard;
-

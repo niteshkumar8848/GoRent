@@ -1,23 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useToast } from "../components/Toast";
-
-// Get API URL from environment or use default
-const getApiUrl = () => {
-  const envUrl = process.env.REACT_APP_API_URL;
-  if (envUrl) return envUrl;
-  // For development, try to detect if running on localhost
-  if (window.location.hostname === "localhost") {
-    return "http://localhost:5000/api";
-  }
-  // For production, construct URL from current hostname
-  return `${window.location.protocol}//${window.location.host}/api`;
-};
-
-const API_URL = getApiUrl();
+import api, { API_URL } from "../api/axios";
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
@@ -29,14 +15,6 @@ const getImageUrl = (imagePath) => {
   }
   return API_URL.replace("/api", "") + imagePath;
 };
-
-// Axios instance with timeout
-const api = axios.create({
-  timeout: 10000,
-  headers: {
-    "Content-Type": "application/json"
-  }
-});
 
 function Home() {
   const [vehicles, setVehicles] = useState([]);
@@ -69,7 +47,7 @@ function Home() {
       if (maxPrice) params.append("maxPrice", maxPrice);
       if (brand) params.append("brand", brand);
 
-      const res = await api.get(`${API_URL}/vehicles?${params}`);
+      const res = await api.get(`/vehicles?${params}`);
       
       // Handle new response format
       const vehiclesData = res.data.data || res.data;
@@ -125,14 +103,11 @@ function Home() {
       setBookingError("");
       
       const res = await api.post(
-        `${API_URL}/bookings`,
+        "/bookings",
         {
           vehicleId: selectedVehicle._id,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
@@ -331,4 +306,3 @@ function Home() {
 }
 
 export default Home;
-

@@ -1,19 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import { useToast } from "../components/Toast";
-
-// Get API URL from environment or use default
-const getApiUrl = () => {
-  const envUrl = process.env.REACT_APP_API_URL;
-  if (envUrl) return envUrl;
-  if (window.location.hostname === "localhost") {
-    return "http://localhost:5000/api";
-  }
-  return `${window.location.protocol}//${window.location.host}/api`;
-};
-
-const API_URL = getApiUrl();
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -54,31 +42,28 @@ function Register() {
     setError("");
 
     try {
-      console.log("Attempting registration to:", API_URL);
-      
-      const res = await axios.post(`${API_URL}/auth/register`, {
+      const res = await api.post("/auth/register", {
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
         password: formData.password
-      }, {
-        timeout: 15000,
-        headers: {
-          "Content-Type": "application/json"
-        }
       });
 
-      console.log("Registration response:", res.data);
+      // Extract token and user data from response
+      // Backend format: { success: true, message: "...", token: "...", data: { id, name, email, role } }
+      const { success, token, data: userData, message } = res.data;
 
-      // Handle new response format
-      const responseData = res.data.data || res.data;
-      
-      if (responseData.token) {
-        localStorage.setItem("token", responseData.token);
+      if (!success) {
+        setError(message || "Registration failed");
+        return;
+      }
+
+      if (token) {
+        localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify({
-          id: responseData.id,
-          name: responseData.name,
-          email: responseData.email,
-          role: responseData.role
+          id: userData?.id,
+          name: userData?.name,
+          email: userData?.email,
+          role: userData?.role
         }));
 
         addToast("Registration successful!", "success");
@@ -190,4 +175,3 @@ function Register() {
 }
 
 export default Register;
-

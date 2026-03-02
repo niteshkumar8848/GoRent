@@ -1,19 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import { useToast } from "../components/Toast";
-
-// Get API URL from environment or use default
-const getApiUrl = () => {
-  const envUrl = process.env.REACT_APP_API_URL;
-  if (envUrl) return envUrl;
-  if (window.location.hostname === "localhost") {
-    return "http://localhost:5000/api";
-  }
-  return `${window.location.protocol}//${window.location.host}/api`;
-};
-
-const API_URL = getApiUrl();
 
 function Login() {
   const [formData, setFormData] = useState({
@@ -42,27 +30,12 @@ function Login() {
     setError("");
 
     try {
-      console.log("Attempting login to:", API_URL);
-      
-      const res = await axios.post(`${API_URL}/auth/login`, {
+      const res = await api.post("/auth/login", {
         email: formData.email.trim(),
         password: formData.password
-      }, {
-        timeout: 15000,
-        headers: {
-          "Content-Type": "application/json"
-        }
       });
 
-      // Debug: Log full response structure for debugging
-      console.log("Login response structure:", {
-        resData: res.data,
-        hasData: !!res.data.data,
-        hasToken: !!res.data.token,
-        hasSuccess: res.data.success
-      });
-
-      // Extract token and user data from correct response structure
+      // Extract token and user data from response
       // Backend format: { success: true, message: "...", token: "...", data: { id, name, email, role } }
       const { success, token, data: userData, message } = res.data;
 

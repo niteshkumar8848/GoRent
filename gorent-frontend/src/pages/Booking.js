@@ -1,19 +1,9 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api, { API_URL } from "../api/axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
 
-// Get API URL from environment or use default
-const getApiUrl = () => {
-  const envUrl = process.env.REACT_APP_API_URL;
-  if (envUrl) return envUrl;
-  if (window.location.hostname === "localhost") {
-    return "http://localhost:5000/api";
-  }
-  return `${window.location.protocol}//${window.location.host}/api`;
-};
-
-const API_URL = getApiUrl();
+// Get the base URL (without /api)
 const BASE_URL = API_URL.replace("/api", "");
 
 // Helper function to get full image URL
@@ -45,12 +35,7 @@ function Bookings() {
       }
       setError("");
       
-      const token = localStorage.getItem("token");
-      
-      const res = await axios.get(`${API_URL}/bookings`, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 10000
-      });
+      const res = await api.get("/bookings");
       
       // Handle both old format (array) and new format ({success, data})
       let bookingData = [];
@@ -81,13 +66,8 @@ function Bookings() {
     confirm("Are you sure you want to cancel this booking?", async () => {
       try {
         setCancelling(bookingId);
-        const token = localStorage.getItem("token");
         
-        const res = await axios.put(
-          `${API_URL}/bookings/${bookingId}/cancel`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const res = await api.put(`/bookings/${bookingId}/cancel`, {});
         
         fetchBookings();
         addToast(res.data?.message || "Booking cancelled successfully", "success");
@@ -199,4 +179,3 @@ function Bookings() {
 }
 
 export default Bookings;
-
