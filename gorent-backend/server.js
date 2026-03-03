@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
+const path = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -58,7 +59,8 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 /* ==============================
    STATIC FILES
 ================================= */
-app.use("/uploads", express.static("uploads"));
+const uploadsDir = path.join(__dirname, "uploads");
+app.use("/uploads", express.static(uploadsDir));
 
 /* ==============================
    DATABASE CONNECTION
@@ -324,4 +326,3 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 });
 
 module.exports = app;
-

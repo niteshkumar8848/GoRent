@@ -1,22 +1,20 @@
 import { useEffect, useState } from "react";
-import api, { API_URL } from "../api/axios";
+import api, { API_ORIGIN } from "../api/axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
 
 // Get the base URL (without /api)
-const BASE_URL = API_URL.replace("/api", "");
+const BASE_URL = API_ORIGIN;
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  // If it's already a full URL (e.g., from ImageKit or placeholder), return as is
-  if (imagePath.startsWith("http")) return imagePath;
-  // If it's a local path starting with /uploads, prepend the server base URL
-  if (imagePath.startsWith("/uploads")) {
-    return BASE_URL + imagePath;
-  }
-  // Fallback: prepend BASE_URL
-  return BASE_URL + imagePath;
+  const normalizedPath = String(imagePath).trim();
+  if (!normalizedPath) return null;
+  if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+  if (normalizedPath.startsWith("/uploads")) return `${BASE_URL}${normalizedPath}`;
+  if (normalizedPath.startsWith("uploads/")) return `${BASE_URL}/${normalizedPath}`;
+  return `${BASE_URL}/${normalizedPath.replace(/^\/+/, "")}`;
 };
 
 function AdminDashboard() {

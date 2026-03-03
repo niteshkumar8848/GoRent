@@ -17,6 +17,13 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
+const API_ORIGIN = (() => {
+  try {
+    return new URL(API_URL).origin;
+  } catch {
+    return API_URL.replace(/\/api\/?$/, "");
+  }
+})();
 
 console.log("API URL:", API_URL);
 
@@ -32,6 +39,9 @@ const api = axios.create({
 // Request interceptor - add Authorization header if token exists
 api.interceptors.request.use(
   (config) => {
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -74,5 +84,5 @@ api.interceptors.response.use(
   }
 );
 
-export { API_URL };
+export { API_URL, API_ORIGIN };
 export default api;

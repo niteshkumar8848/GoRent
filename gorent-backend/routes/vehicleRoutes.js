@@ -6,6 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const mongoose = require("mongoose");
+const vehicleUploadDir = path.join(__dirname, "..", "uploads", "vehicles");
 
 // Middleware to check if MongoDB is connected
 const checkDB = (req, res, next) => {
@@ -21,11 +22,10 @@ const checkDB = (req, res, next) => {
 // Configure multer for local file storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = "uploads/vehicles";
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    if (!fs.existsSync(vehicleUploadDir)) {
+      fs.mkdirSync(vehicleUploadDir, { recursive: true });
     }
-    cb(null, uploadDir);
+    cb(null, vehicleUploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1E9);
@@ -241,7 +241,7 @@ router.put("/:id", checkDB, auth, admin, upload.single("image"), handleMulterErr
 
     if (req.file) {
       if (vehicle.image) {
-        const oldImagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
+        const oldImagePath = path.join(vehicleUploadDir, path.basename(vehicle.image));
         if (fs.existsSync(oldImagePath)) {
           try { fs.unlinkSync(oldImagePath); } catch (e) { console.error(e); }
         }
@@ -296,7 +296,7 @@ router.delete("/:id", checkDB, auth, admin, async (req, res) => {
     }
 
     if (vehicle.image) {
-      const imagePath = path.join(process.cwd(), vehicle.image.replace(/^\//, ""));
+      const imagePath = path.join(vehicleUploadDir, path.basename(vehicle.image));
       if (fs.existsSync(imagePath)) {
         try { fs.unlinkSync(imagePath); } catch (e) { console.error(e); }
       }
@@ -315,4 +315,3 @@ router.delete("/:id", checkDB, auth, admin, async (req, res) => {
 });
 
 module.exports = router;
-

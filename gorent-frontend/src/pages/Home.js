@@ -3,17 +3,17 @@ import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useToast } from "../components/Toast";
-import api, { API_URL } from "../api/axios";
+import api, { API_ORIGIN } from "../api/axios";
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  if (imagePath.startsWith("http")) return imagePath;
-  if (imagePath.startsWith("/uploads")) {
-    // Use the API base URL for images
-    return API_URL.replace("/api", "") + imagePath;
-  }
-  return API_URL.replace("/api", "") + imagePath;
+  const normalizedPath = String(imagePath).trim();
+  if (!normalizedPath) return null;
+  if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+  if (normalizedPath.startsWith("/uploads")) return `${API_ORIGIN}${normalizedPath}`;
+  if (normalizedPath.startsWith("uploads/")) return `${API_ORIGIN}/${normalizedPath}`;
+  return `${API_ORIGIN}/${normalizedPath.replace(/^\/+/, "")}`;
 };
 
 function Home() {
