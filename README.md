@@ -1,376 +1,212 @@
-# 🚗 GoRent - Vehicle Rental Platform
+# GoRent
 
-<div align="center">
+GoRent is a full-stack vehicle rental platform built with React, Node.js/Express, and MongoDB. It supports customer bookings, admin operations, pickup location mapping, post-ride feedback, and role-based access control with JWT authentication.
 
-![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
-![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)
-![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
-![License](https://img.shields.io/badge/License-ISC-green.svg)
-![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)
+## Overview
 
-*A full-stack MERN application for vehicle rental management with user authentication, booking system, and admin dashboard.*
+GoRent provides:
+- Customer authentication, vehicle browsing, and booking flows
+- Admin dashboard for vehicle, booking, and user governance
+- Map-based pickup location management (Leaflet + OpenStreetMap)
+- Booking feedback collection and analytics
+- Modern responsive UI with theme support
 
-</div>
-
----
-
-## 📋 Table of Contents
-
-- [✨ Features](#-features)
-- [🛠️ Tech Stack](#️-tech-stack)
-- [🚀 Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Variables](#environment-variables)
-- [📱 Application Screenshots](#-application-screenshots)
-- [🔌 API Documentation](#-api-documentation)
-- [🏗️ Project Structure](#️-project-structure)
-- [👤 Default Credentials](#-default-credentials)
-- [🔒 Security Features](#-security-features)
-- [📦 Deployment](#-deployment)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-- [📞 Support](#-support)
-
----
-
-## ✨ Features
-
-### User Features
-- 🔐 **User Registration & Login** - Secure JWT-based authentication
-- 🚗 **Browse Vehicles** - View all available vehicles with details
-- 🔍 **Search & Filter** - Search by name, brand, and filter by price
-- 📅 **Book Vehicles** - Select dates and book vehicles instantly
-- 📊 **User Dashboard** - View booking history and status
-- 👤 **Profile Management** - Update name, email, and password
-
-### Admin Features
-- 📈 **Admin Dashboard** - Centralized management interface
-- 🚙 **Vehicle Management** - Add, edit, delete, and toggle vehicle availability
-- 📋 **Booking Management** - View all bookings and update status
-- ✅ **Booking Workflow** - Confirm, complete, or cancel bookings
-- ⚙️ **Profile Settings** - Manage admin account details
-
-### System Features
-- 🖼️ **Image Upload** - Local storage with ImageKit CDN support
-- 🔒 **Role-based Access** - Secure admin-only routes
-- 📱 **Responsive Design** - Works on desktop and mobile
-- ⚡ **Real-time Updates** - Live data synchronization
-- 🛡️ **Input Validation** - Comprehensive form validation
-- 🎨 **Modern UI** - Clean and intuitive interface
-
----
-
-## 🛠️ Tech Stack
-
-### Backend
-| Technology | Description |
-|------------|-------------|
-| **Node.js** | JavaScript runtime environment |
-| **Express.js** | Fast, minimalist web framework |
-| **MongoDB** | NoSQL database |
-| **Mongoose** | MongoDB object modeling |
-| **JWT** | JSON Web Token authentication |
-| **bcryptjs** | Password hashing |
-| **Multer** | File upload middleware |
-| **ImageKit** | Image CDN and optimization |
-| **CORS** | Cross-origin resource sharing |
+## Tech Stack
 
 ### Frontend
-| Technology | Description |
-|------------|-------------|
-| **React** | Facebook UI library |
-| **React Router** | Client-side routing |
-| **Axios** | HTTP client |
-| **React Datepicker** | Date selection component |
-| **CSS3** | Styling with custom properties |
+- React 18
+- React Router DOM
+- Axios
+- React DatePicker
+- Leaflet + React Leaflet
+- CSS (custom design tokens and utility classes)
 
----
+### Backend
+- Node.js
+- Express
+- MongoDB + Mongoose
+- JWT authentication
+- bcryptjs
+- multer (vehicle media uploads)
 
-## 🚀 Getting Started
+## Monorepo Structure
 
-### Prerequisites
-
-Before running the application, ensure you have the following installed:
-
-- **Node.js** (v14 or higher) - [Download](https://nodejs.org/)
-- **npm** or **yarn** - Package managers
-- **MongoDB** - Local installation or [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-
-### Installation
-
-#### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-repo/GoRent.git
-cd GoRent
+```text
+GoRent/
+├── gorent-backend/
+│   ├── middleware/
+│   ├── models/
+│   ├── routes/
+│   ├── uploads/
+│   ├── utils/
+│   ├── server.js
+│   └── package.json
+├── gorent-frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── utils/
+│   │   ├── App.js
+│   │   └── index.css
+│   └── package.json
+├── Guide.md
+└── README.md
 ```
 
-#### 2. Backend Setup
+## Core Features
 
-```bash
-# Navigate to backend directory
-cd gorent-backend
+### Customer
+- Register/login with JWT
+- Browse vehicles with detail cards
+- Choose pickup location via text search or map pin drop
+- Book vehicles by date range
+- Submit post-completion feedback (one-time per completed booking)
 
-# Install dependencies
-npm install
+### Admin
+- Manage vehicles (create/update/delete/availability)
+- Set pickup locations with manual inputs or map picker
+- Manage booking statuses
+- View feedback summaries per vehicle
+- Blacklist/unblock users
 
-# Create environment file
-cp .env.example .env
-```
+### System
+- Route protection for authenticated/admin areas
+- Nominatim proxy endpoints for geocoding/reverse geocoding
+- Footer + legal/informational pages
+- Responsive UI
 
-#### 3. Frontend Setup
+## Prerequisites
 
-```bash
-# Navigate to frontend directory (in a new terminal)
-cd gorent-frontend
+- Node.js 18+
+- npm 9+
+- MongoDB instance (local or Atlas)
 
-# Install dependencies
-npm install
-```
+## Environment Variables
 
----
-
-### Environment Variables
-
-Create a `.env` file in the `gorent-backend` directory with the following variables:
+### Backend: `gorent-backend/.env`
 
 ```env
-# ====================
-# Server Configuration
-# ====================
+MONGO_URI=mongodb://localhost:27017/gorent
+JWT_SECRET=your_jwt_secret
 PORT=5000
 NODE_ENV=development
-
-# ====================
-# Database Configuration
-# ====================
-MONGO_URI=mongodb://localhost:27017/gorent
-# Or use MongoDB Atlas:
-# MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/gorent
-
-# ====================
-# JWT Configuration
-# ====================
-JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
-JWT_EXPIRE=7d
-
-# ====================
-# ImageKit Configuration
-# ====================
-IMAGEKIT_PUBLIC_KEY=your_imagekit_public_key
-IMAGEKIT_PRIVATE_KEY=your_imagekit_private_key
-IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/your_imagekit_id
-
-# ====================
-# Admin Reset Secret (Optional)
-# ====================
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ADMIN_SECRET=gorent-admin-reset
 ```
 
-> **⚠️ Important**: Replace all placeholder values with your actual credentials in production!
-
-For the frontend, create a `.env` file in `gorent-frontend` (optional):
+### Frontend: `gorent-frontend/.env`
 
 ```env
 REACT_APP_API_URL=http://localhost:5000/api
 ```
 
----
-
-### Running the Application
-
-#### Start Backend Server
+## Installation
 
 ```bash
-# Development mode (with auto-reload)
+# backend
+cd gorent-backend
+npm install
+
+# frontend
+cd ../gorent-frontend
+npm install
+```
+
+## Run Locally
+
+```bash
+# terminal 1 (backend)
 cd gorent-backend
 npm run dev
 
-# OR Production mode
-npm start
-```
-
-The backend API will be available at: **http://localhost:5000**
-
-#### Start Frontend Development Server
-
-```bash
-# In a new terminal
+# terminal 2 (frontend)
 cd gorent-frontend
 npm start
 ```
 
-The frontend will be available at: **http://localhost:3000**
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:5000/api`
 
----
+## Scripts
 
-## 🔌 API Documentation
+### Backend (`gorent-backend/package.json`)
+- `npm run dev` - start backend with nodemon
+- `npm start` - start backend with node
 
-### Authentication Endpoints
+### Frontend (`gorent-frontend/package.json`)
+- `npm start` - run development server
+- `npm run build` - create production build
+- `npm test` - run tests
 
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| POST | `/api/auth/register` | Register new user | Public |
-| POST | `/api/auth/login` | Login user | Public |
-| GET | `/api/auth/me` | Get current user | Private |
-| PUT | `/api/auth/me` | Update user profile | Private |
-| PUT | `/api/auth/admin-profile` | Update admin profile | Admin |
+## API Summary
 
-### Vehicle Endpoints
+Base URL: `http://localhost:5000/api`
 
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/vehicles` | Get all vehicles | Public |
-| GET | `/api/vehicles/:id` | Get single vehicle | Public |
-| POST | `/api/vehicles` | Create vehicle | Admin |
-| PUT | `/api/vehicles/:id` | Update vehicle | Admin |
-| DELETE | `/api/vehicles/:id` | Delete vehicle | Admin |
+### Auth
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `PUT /auth/me`
+- `PUT /auth/admin-profile`
+- `GET /auth/users` (admin)
+- `PUT /auth/users/:id/blacklist` (admin)
+- `PUT /auth/users/:id/unblacklist` (admin)
 
-**Query Parameters** (GET /api/vehicles):
-- `search` - Search by name or brand
-- `brand` - Filter by brand
-- `maxPrice` - Filter by maximum price
+### Vehicles
+- `GET /vehicles`
+- `GET /vehicles/locations`
+- `GET /vehicles/:id`
+- `POST /vehicles` (admin)
+- `PUT /vehicles/:id` (admin)
+- `DELETE /vehicles/:id` (admin)
 
-### Booking Endpoints
+### Bookings
+- `POST /bookings`
+- `GET /bookings`
+- `GET /bookings/all` (admin)
+- `PUT /bookings/:id/status` (admin)
+- `PUT /bookings/:id/cancel`
+- `DELETE /bookings/:id` (admin)
 
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/bookings` | Get user bookings | Private |
-| GET | `/api/bookings/all` | Get all bookings | Admin |
-| POST | `/api/bookings` | Create booking | Private |
-| PUT | `/api/bookings/:id/status` | Update booking status | Admin |
-| PUT | `/api/bookings/:id/cancel` | Cancel booking | Private |
-| DELETE | `/api/bookings/:id` | Delete booking | Admin |
+### Feedback
+- `POST /feedback`
+- `PUT /feedback/skip/:bookingId`
+- `GET /feedback/summary` (admin)
 
-### Health Check
+### Location Proxy (Nominatim)
+- `GET /location/search?q=...`
+- `GET /location/reverse?lat=...&lon=...`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Check API health status |
+### Health
+- `GET /health`
 
----
+## Default Admin Account
 
-## 🏗️ Project Structure
+On first successful backend startup, default admin is created:
 
-```
-GoRent/
-│
-├── gorent-backend/
-│   ├── middleware/
-│   │   ├── adminMiddleware.js      # Admin authorization
-│   │   └── authMiddleware.js       # JWT authentication
-│   ├── models/
-│   │   ├── Booking.js              # Booking schema
-│   │   ├── User.js                 # User schema
-│   │   └── Vehicle.js              # Vehicle schema
-│   ├── routes/
-│   │   ├── authRoutes.js           # Authentication routes
-│   │   ├── bookingRoutes.js        # Booking routes
-│   │   └── vehicleRoutes.js        # Vehicle routes
-│   ├── utils/
-│   │   └── imagekit.js             # ImageKit configuration
-│   ├── uploads/
-│   │   └── vehicles/               # Uploaded vehicle images
-│   ├── seedAdmin.js                # Admin user seeder
-│   ├── server.js                   # Express server entry
-│   └── package.json
-│
-├── gorent-frontend/
-│   ├── public/
-│   │   ├── index.html
-│   │   └── logo.jpg
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ConfirmDialog.js    # Confirmation modal
-│   │   │   ├── Navbar.js           # Navigation bar
-│   │   │   ├── ProtectedRoute.js   # Route protection
-│   │   │   ├── ThemeProvider.js    # Theme context
-│   │   │   └── Toast.js           # Toast notifications
-│   │   ├── pages/
-│   │   │   ├── AdminDashboard.js  # Admin dashboard
-│   │   │   ├── Booking.js          # User bookings
-│   │   │   ├── Home.js             # Home/Vehicle listing
-│   │   │   ├── Login.js            # Login page
-│   │   │   ├── Register.js         # Registration page
-│   │   │   └── UserDashboard.js    # User dashboard
-│   │   ├── App.js                  # Main app component
-│   │   ├── index.js                # React entry point
-│   │   └── index.css               # Global styles
-│   └── package.json
-│
-├── .gitignore
-└── README.md                        # This file
-```
+- Email: `admin@gorent.com`
+- Password: `admin123`
 
----
+## Security Notes
 
-## 👤 Default Credentials
+- JWT is required for protected endpoints.
+- Admin-only routes validate role from token payload.
+- Blacklisted users are blocked from creating bookings.
+- Sensitive values must be provided via `.env` files.
 
-After installation, an admin user is automatically created:
+## Troubleshooting
 
-| Field | Value |
-|-------|-------|
-| **Email** | `admin@gorent.com` |
-| **Password** | `admin123` |
+### MongoDB not connecting
+- Confirm `MONGO_URI` is valid.
+- Ensure MongoDB service/cluster is reachable.
 
-> ⚠️ **Security Warning**: Change the admin password immediately after first login!
+### CORS errors
+- Add frontend origin to `ALLOWED_ORIGINS`.
 
----
+### Build warnings
+- Current frontend has non-blocking lint warnings; app still builds and runs.
 
-## 🔒 Security Features
+## License
 
-- **Password Hashing**: All passwords are hashed using bcryptjs
-- **JWT Authentication**: Secure token-based authentication
-- **Role-based Access Control**: Separate permissions for users and admins
-- **Input Validation**: Server-side validation on all inputs
-- **Error Handling**: Global error handling with appropriate HTTP status codes
-- **CORS Configuration**: Configured for secure cross-origin requests
-- **MongoDB Injection Prevention**: Parameterized queries via Mongoose
-
----
-
-## 📦 Deployment
-
-### Building for Production
-
-```bash
-# Build frontend
-cd gorent-frontend
-npm run build
-```
-
-The built files will be in `gorent-frontend/build/`
-
-### Deploy to Production Server
-
-1. **Set environment variables** on your production server
-2. **Build the frontend** using `npm run build`
-3. **Serve static files** from the `build` directory
-4. **Use PM2** or similar for process management:
-
-```bash
-# Install PM2
-npm install -g pm2
-
-# Start backend
-pm2 start gorent-backend/server.js --name gorent-backend
-```
-
-### Recommended Hosting
-
-- **Frontend**: Vercel, Netlify, or any static hosting
-- **Backend**: Render, Railway, Heroku, or DigitalOcean
-- **Database**: MongoDB Atlas (cloud) or self-hosted MongoDB
-
----
-
-<div align="center">
-
-**Made with ❤️ by Nitesh Kumar Lodh**
-
-*Vehicle Rental Made Simple*
-
-</div>
-
+This project is intended for educational and internal development use unless otherwise specified.

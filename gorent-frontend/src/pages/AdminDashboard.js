@@ -1,26 +1,52 @@
 import { useEffect, useState } from "react";
-import api, { API_ORIGIN } from "../api/axios";
+import axios from "axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
+import VehicleDetailsCard from "../components/VehicleDetailsCard";
+import AdminLocationPickerMap from "../components/AdminLocationPickerMap";
 
-// Get the base URL (without /api)
-const BASE_URL = API_ORIGIN;
+const getApiUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:5000/api";
+  }
+  return `${window.location.protocol}//${window.location.host}/api`;
+};
+
+const API_URL = getApiUrl();
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  const normalizedPath = String(imagePath).trim();
-  if (!normalizedPath) return null;
-  if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
-  if (normalizedPath.startsWith("/uploads")) return `${BASE_URL}${normalizedPath}`;
-  if (normalizedPath.startsWith("uploads/")) return `${BASE_URL}/${normalizedPath}`;
-  return `${BASE_URL}/${normalizedPath.replace(/^\/+/, "")}`;
+  const normalizedPath = String(imagePath).trim().replace(/\\/g, "/");
+  if (normalizedPath.startsWith("http")) return normalizedPath;
+
+  const apiOrigin = API_URL.replace(/\/api\/?$/, "");
+  const apiBase = API_URL.replace(/\/$/, "");
+
+  // Route uploaded files through /api/uploads for proxy-based deployments
+  if (normalizedPath.startsWith("/uploads")) {
+    return `${apiBase}${normalizedPath}`;
+  }
+
+  if (normalizedPath.startsWith("uploads/")) {
+    return `${apiBase}/${normalizedPath}`;
+  }
+
+  if (normalizedPath.startsWith("/")) {
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return `${apiOrigin}/${normalizedPath}`;
 };
 
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("bookings");
   const [bookings, setBookings] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [feedbackSummary, setFeedbackSummary] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { addToast } = useToast();
@@ -44,12 +70,25 @@ function AdminDashboard() {
     name: "",
     brand: "",
     pricePerDay: "",
+    seats: "",
+    fuelType: "",
+    category: "",
+    ac: "",
+    luggage_capacity: "",
+    pickup_locations: [{ name: "", lat: "", lng: "" }],
     available: true
   });
   const [vehicleImage, setVehicleImage] = useState(null);
   const [existingImage, setExistingImage] = useState("");
   const [imagePreview, setImagePreview] = useState("");
   const [vehicleLoading, setVehicleLoading] = useState(false);
+  const [mapPickerIndex, setMapPickerIndex] = useState(null);
+
+  const token = localStorage.getItem("token");
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10000 // 10 second timeout
+  };
 
   useEffect(() => {
     // Initial fetch with loading indicator
@@ -71,7 +110,13 @@ function AdminDashboard() {
       if (showLoading) {
         setLoading(true);
       }
-      await Promise.all([fetchBookings(showLoading), fetchVehicles(showLoading), fetchAdminProfile(showLoading)]);
+      await Promise.all([
+        fetchBookings(showLoading),
+        fetchVehicles(showLoading),
+        fetchUsers(showLoading),
+        fetchAdminProfile(showLoading),
+        fetchFeedbackSummary(showLoading)
+      ]);
     } catch (err) {
       if (showLoading) {
         setError("Failed to load data");
@@ -85,7 +130,7 @@ function AdminDashboard() {
 
   const fetchAdminProfile = async (showLoading = true) => {
     try {
-      const res = await api.get("/auth/me");
+      const res = await axios.get(`${API_URL}/auth/me`, config);
       
       // Handle both old and new response formats
       const userData = res.data.data || res.data;
@@ -112,7 +157,7 @@ function AdminDashboard() {
 
   const fetchBookings = async (showLoading = true) => {
     try {
-      const res = await api.get("/bookings/all");
+      const res = await axios.get(`${API_URL}/bookings/all`, config);
       
       // Handle both old format (array) and new format ({success, data})
       let bookingData = [];
@@ -136,7 +181,7 @@ function AdminDashboard() {
 
   const fetchVehicles = async (showLoading = true) => {
     try {
-      const res = await api.get("/vehicles");
+      const res = await axios.get(`${API_URL}/vehicles?includeUnavailable=true`);
       
       // Handle both old format (array) and new format ({success, data})
       let vehicleData = [];
@@ -158,6 +203,44 @@ function AdminDashboard() {
     }
   };
 
+  const fetchUsers = async (showLoading = true) => {
+    try {
+      const res = await axios.get(`${API_URL}/auth/users`, config);
+
+      let usersData = [];
+      if (Array.isArray(res.data)) {
+        usersData = res.data;
+      } else if (res.data && res.data.data) {
+        usersData = res.data.data;
+      }
+
+      setUsers(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(usersData)) {
+          return usersData;
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error("Failed to fetch users");
+    }
+  };
+
+  const fetchFeedbackSummary = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/feedback/summary`, config);
+      const summaryData = Array.isArray(res.data?.data) ? res.data.data : [];
+      const summaryMap = {};
+
+      summaryData.forEach((item) => {
+        summaryMap[String(item.vehicle_id)] = item;
+      });
+
+      setFeedbackSummary(summaryMap);
+    } catch (err) {
+      setFeedbackSummary({});
+    }
+  };
+
   // Booking handlers
   const updateBookingStatus = async (bookingId, status) => {
     // Optimistically update the UI first
@@ -168,7 +251,11 @@ function AdminDashboard() {
     setBookings(updatedBookings);
     
     try {
-      const res = await api.put(`/bookings/${bookingId}/status`, { status });
+      const res = await axios.put(
+        `${API_URL}/bookings/${bookingId}/status`,
+        { status },
+        config
+      );
       // Success
       addToast(res.data?.message || `Booking ${status} successfully`, "success");
     } catch (err) {
@@ -189,6 +276,12 @@ function AdminDashboard() {
       formData.append("name", vehicleForm.name);
       formData.append("brand", vehicleForm.brand);
       formData.append("pricePerDay", vehicleForm.pricePerDay);
+      formData.append("seats", vehicleForm.seats);
+      formData.append("fuelType", vehicleForm.fuelType);
+      formData.append("category", vehicleForm.category);
+      formData.append("ac", vehicleForm.ac);
+      formData.append("luggage_capacity", vehicleForm.luggage_capacity);
+      formData.append("pickup_locations", JSON.stringify(vehicleForm.pickup_locations));
       formData.append("available", vehicleForm.available);
       
       // Append image if selected
@@ -197,16 +290,31 @@ function AdminDashboard() {
       }
       
       if (editingVehicle) {
-        await api.put(`/vehicles/${editingVehicle._id}`, formData);
+        await axios.put(
+          `${API_URL}/vehicles/${editingVehicle._id}`,
+          formData,
+          config
+        );
         addToast("Vehicle updated successfully", "success");
       } else {
-        await api.post("/vehicles", formData);
+        await axios.post(`${API_URL}/vehicles`, formData, config);
         addToast("Vehicle added successfully", "success");
       }
       
       setShowVehicleForm(false);
       setEditingVehicle(null);
-      setVehicleForm({ name: "", brand: "", pricePerDay: "", available: true });
+      setVehicleForm({
+        name: "",
+        brand: "",
+        pricePerDay: "",
+        seats: "",
+        fuelType: "",
+        category: "",
+        ac: "",
+        luggage_capacity: "",
+        pickup_locations: [{ name: "", lat: "", lng: "" }],
+        available: true
+      });
       setVehicleImage(null);
       setExistingImage("");
       setImagePreview("");
@@ -224,6 +332,18 @@ function AdminDashboard() {
       name: vehicle.name,
       brand: vehicle.brand,
       pricePerDay: vehicle.pricePerDay,
+      seats: vehicle.seats ?? "",
+      fuelType: vehicle.fuelType || vehicle.fuel_type || "",
+      category: vehicle.category || "",
+      ac: typeof vehicle.ac === "boolean" ? String(vehicle.ac) : "",
+      luggage_capacity: vehicle.luggage_capacity || "",
+      pickup_locations: Array.isArray(vehicle.pickup_locations) && vehicle.pickup_locations.length > 0
+        ? vehicle.pickup_locations.map((location) => ({
+            name: location.name || "",
+            lat: location.lat ?? "",
+            lng: location.lng ?? ""
+          }))
+        : [{ name: "", lat: "", lng: "" }],
       available: vehicle.available
     });
     // Use full URL for existing image preview
@@ -247,7 +367,18 @@ function AdminDashboard() {
   };
 
   const resetVehicleForm = () => {
-    setVehicleForm({ name: "", brand: "", pricePerDay: "", available: true });
+    setVehicleForm({
+      name: "",
+      brand: "",
+      pricePerDay: "",
+      seats: "",
+      fuelType: "",
+      category: "",
+      ac: "",
+      luggage_capacity: "",
+      pickup_locations: [{ name: "", lat: "", lng: "" }],
+      available: true
+    });
     setVehicleImage(null);
     setExistingImage("");
     setImagePreview("");
@@ -257,7 +388,7 @@ function AdminDashboard() {
   const handleDeleteVehicle = async (vehicleId) => {
     confirm("Are you sure you want to delete this vehicle?", async () => {
       try {
-        await api.delete(`/vehicles/${vehicleId}`);
+        await axios.delete(`${API_URL}/vehicles/${vehicleId}`, config);
         fetchVehicles();
         addToast("Vehicle deleted successfully", "success");
       } catch (err) {
@@ -275,7 +406,11 @@ function AdminDashboard() {
     setVehicles(updatedVehicles);
     
     try {
-      await api.put(`/vehicles/${vehicle._id}`, { available: !vehicle.available });
+      await axios.put(
+        `${API_URL}/vehicles/${vehicle._id}`,
+        { available: !vehicle.available },
+        config
+      );
       // No need to refetch, UI is already updated
     } catch (err) {
       // Revert on error
@@ -283,6 +418,81 @@ function AdminDashboard() {
         v._id === vehicle._id ? { ...v, available: originalAvailable } : v
       ));
       addToast(err.response?.data?.message || "Failed to update vehicle", "error");
+    }
+  };
+
+  const updatePickupLocationField = (index, field, value) => {
+    setVehicleForm((prev) => ({
+      ...prev,
+      pickup_locations: prev.pickup_locations.map((location, locationIndex) => (
+        locationIndex === index ? { ...location, [field]: value } : location
+      ))
+    }));
+  };
+
+  const toggleUserBlacklist = async (targetUser, shouldBlacklist) => {
+    const endpoint = shouldBlacklist
+      ? `${API_URL}/auth/users/${targetUser._id}/blacklist`
+      : `${API_URL}/auth/users/${targetUser._id}/unblacklist`;
+
+    const actionText = shouldBlacklist ? "blacklist" : "unblock";
+    confirm(`Are you sure you want to ${actionText} this user?`, async () => {
+      try {
+        await axios.put(
+          endpoint,
+          shouldBlacklist ? { reason: "Blocked by admin" } : {},
+          config
+        );
+        addToast(`User ${shouldBlacklist ? "blacklisted" : "unblocked"} successfully`, "success");
+        fetchUsers(false);
+      } catch (err) {
+        addToast(err.response?.data?.message || `Failed to ${actionText} user`, "error");
+      }
+    });
+  };
+
+  const addPickupLocationField = () => {
+    setVehicleForm((prev) => ({
+      ...prev,
+      pickup_locations: [...prev.pickup_locations, { name: "", lat: "", lng: "" }]
+    }));
+  };
+
+  const removePickupLocationField = (index) => {
+    setVehicleForm((prev) => ({
+      ...prev,
+      pickup_locations: prev.pickup_locations.filter((_, locationIndex) => locationIndex !== index)
+    }));
+  };
+
+  const openLocationPicker = (index) => {
+    setMapPickerIndex(index);
+  };
+
+  const closeLocationPicker = () => {
+    setMapPickerIndex(null);
+  };
+
+  const applyMapSelection = async (position) => {
+    const [lat, lng] = position;
+    if (mapPickerIndex === null) return;
+
+    updatePickupLocationField(mapPickerIndex, "lat", String(lat));
+    updatePickupLocationField(mapPickerIndex, "lng", String(lng));
+
+    try {
+      const response = await axios.get(`${API_URL}/location/reverse`, {
+        params: { lat, lon: lng },
+        timeout: 10000
+      });
+      const address = response.data?.data?.display_name;
+      if (address) {
+        updatePickupLocationField(mapPickerIndex, "name", address);
+      }
+    } catch (err) {
+      // Keep manual name entry fallback if reverse geocode fails
+    } finally {
+      closeLocationPicker();
     }
   };
 
@@ -312,7 +522,7 @@ function AdminDashboard() {
         newPassword: profileForm.newPassword
       };
 
-      const res = await api.put("/auth/admin-profile", updateData);
+      const res = await axios.put(`${API_URL}/auth/admin-profile`, updateData, config);
       
       addToast(res.data?.message || "Profile updated successfully", "success");
       
@@ -325,8 +535,8 @@ function AdminDashboard() {
       }));
       
       // Update localStorage with new user info
-      if (res.data.data) {
-        localStorage.setItem("user", JSON.stringify(res.data.data));
+      if (res.data.user) {
+        localStorage.setItem("user", JSON.stringify(res.data.user));
       }
       
       // Refresh admin profile
@@ -392,6 +602,12 @@ function AdminDashboard() {
             onClick={() => setActiveTab("vehicles")}
           >
             Vehicles ({vehicles.length})
+          </button>
+          <button
+            className={`admin-tab ${activeTab === "users" ? "active" : ""}`}
+            onClick={() => setActiveTab("users")}
+          >
+            Users ({users.length})
           </button>
           <button
             className={`admin-tab ${activeTab === "settings" ? "active" : ""}`}
@@ -518,6 +734,19 @@ function AdminDashboard() {
                       <p className="vehicle-price">
                         ₹{vehicle.pricePerDay} <span>/ day</span>
                       </p>
+                      <VehicleDetailsCard vehicle={vehicle} />
+                      <div className="vehicle-feedback-summary">
+                        <h4>Feedback</h4>
+                        <p>
+                          Average Rating: {feedbackSummary[vehicle._id]?.average_rating || "N/A"} (
+                          {feedbackSummary[vehicle._id]?.review_count || 0} reviews)
+                        </p>
+                        {(feedbackSummary[vehicle._id]?.recent_comments || []).map((comment, index) => (
+                          <p key={`${vehicle._id}-comment-${index}`} className="vehicle-feedback-comment">
+                            "{comment}"
+                          </p>
+                        ))}
+                      </div>
                       <div className="vehicle-actions">
                         <button
                           className="btn btn-outline btn-sm"
@@ -549,6 +778,65 @@ function AdminDashboard() {
                 <div className="empty-state-icon">🚗</div>
                 <h3 className="empty-state-title">No vehicles yet</h3>
                 <p>Add your first vehicle to start renting</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === "users" && (
+          <div>
+            {users.length > 0 ? (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((targetUser) => (
+                    <tr key={targetUser._id}>
+                      <td>{targetUser.name || "N/A"}</td>
+                      <td>{targetUser.email || "N/A"}</td>
+                      <td>{targetUser.role || "user"}</td>
+                      <td>
+                        <span className={`booking-status ${targetUser.isBlacklisted ? "status-cancelled" : "status-confirmed"}`}>
+                          {targetUser.isBlacklisted ? "Blacklisted" : "Active"}
+                        </span>
+                      </td>
+                      <td>
+                        {targetUser.role !== "admin" ? (
+                          targetUser.isBlacklisted ? (
+                            <button
+                              className="btn btn-success btn-sm"
+                              onClick={() => toggleUserBlacklist(targetUser, false)}
+                            >
+                              Unblock
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => toggleUserBlacklist(targetUser, true)}
+                            >
+                              Blacklist
+                            </button>
+                          )
+                        ) : (
+                          <span className="text-muted">Protected</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-state-icon">👥</div>
+                <h3 className="empty-state-title">No users found</h3>
               </div>
             )}
           </div>
@@ -702,6 +990,128 @@ function AdminDashboard() {
                       required
                     />
                   </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Seats</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="e.g., 4"
+                      min="1"
+                      value={vehicleForm.seats}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, seats: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Fuel Type</label>
+                    <select
+                      className="form-input"
+                      value={vehicleForm.fuelType}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, fuelType: e.target.value })}
+                    >
+                      <option value="">Select fuel type</option>
+                      <option value="Petrol">Petrol</option>
+                      <option value="Diesel">Diesel</option>
+                      <option value="Electric">Electric</option>
+                      <option value="CNG">CNG</option>
+                      <option value="Hybrid">Hybrid</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Vehicle Category</label>
+                    <select
+                      className="form-input"
+                      value={vehicleForm.category}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, category: e.target.value })}
+                    >
+                      <option value="">Select category</option>
+                      <option value="Hatchback">Hatchback</option>
+                      <option value="Sedan">Sedan</option>
+                      <option value="SUV">SUV</option>
+                      <option value="Jeep">Jeep</option>
+                      <option value="Van">Van</option>
+                      <option value="Auto">Auto</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">AC Option</label>
+                    <select
+                      className="form-input"
+                      value={vehicleForm.ac}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, ac: e.target.value })}
+                    >
+                      <option value="">Not specified</option>
+                      <option value="true">AC</option>
+                      <option value="false">Non-AC</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Luggage Capacity</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g., 2 bags"
+                      value={vehicleForm.luggage_capacity}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, luggage_capacity: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Pickup Locations</label>
+                    <div className="admin-pickup-locations">
+                      {vehicleForm.pickup_locations.map((location, index) => (
+                        <div key={`pickup-location-${index}`} className="admin-pickup-row">
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Location name"
+                            value={location.name}
+                            onChange={(e) => updatePickupLocationField(index, "name", e.target.value)}
+                          />
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input"
+                            placeholder="Latitude"
+                            value={location.lat}
+                            onChange={(e) => updatePickupLocationField(index, "lat", e.target.value)}
+                          />
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input"
+                            placeholder="Longitude"
+                            value={location.lng}
+                            onChange={(e) => updatePickupLocationField(index, "lng", e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => openLocationPicker(index)}
+                          >
+                            Pick on Map
+                          </button>
+                          {vehicleForm.pickup_locations.length > 1 && (
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              onClick={() => removePickupLocationField(index)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-outline btn-sm" onClick={addPickupLocationField}>
+                        Add Location
+                      </button>
+                    </div>
+                  </div>
                   
                   <div className="form-group">
                     <label className="form-label">Vehicle Image</label>
@@ -753,6 +1163,28 @@ function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+        {mapPickerIndex !== null && (
+          <div className="modal-overlay" onClick={closeLocationPicker}>
+            <div className="modal admin-location-picker-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="modal-title">Select Vehicle Pickup Location</h2>
+                <button className="modal-close" onClick={closeLocationPicker}>
+                  &times;
+                </button>
+              </div>
+              <div className="modal-body">
+                <AdminLocationPickerMap
+                  initialPosition={[
+                    Number(vehicleForm.pickup_locations[mapPickerIndex]?.lat) || 28.6139,
+                    Number(vehicleForm.pickup_locations[mapPickerIndex]?.lng) || 77.209
+                  ]}
+                  onConfirm={applyMapSelection}
+                  onCancel={closeLocationPicker}
+                />
+              </div>
             </div>
           </div>
         )}

@@ -56,5 +56,12 @@ logs/
 # ===========================
 Thumbs.db
 
-# Ignore vehicles Image
-# /gorent-backend/uploads/vehicles
+# ===========================
+# Local Tooling
+# ===========================
+.codex
+
+# ===========================
+# Backend Uploads
+# ===========================
+gorent-backend/uploads/

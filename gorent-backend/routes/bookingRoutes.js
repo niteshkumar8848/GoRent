@@ -1,9 +1,78 @@
 const router = require("express").Router();
 const Booking = require("../models/Booking");
 const Vehicle = require("../models/Vehicle");
+const User = require("../models/User");
 const auth = require("../middleware/authMiddleware");
 const admin = require("../middleware/adminMiddleware");
 const mongoose = require("mongoose");
+
+const getRequestOrigin = (req) => {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const protocol = (typeof forwardedProto === "string" ? forwardedProto.split(",")[0] : req.protocol) || "http";
+  const host = req.get("host");
+  return `${protocol}://${host}`;
+};
+
+const getPublicImageUrl = (req, imagePath) => {
+  if (!imagePath) return "";
+  const normalized = String(imagePath).trim().replace(/\\/g, "/");
+  if (!normalized) return "";
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
+  }
+
+  const origin = getRequestOrigin(req);
+
+  if (normalized.startsWith("/api/uploads/")) {
+    return `${origin}${normalized}`;
+  }
+  if (normalized.startsWith("/uploads/")) {
+    return `${origin}/api${normalized}`;
+  }
+  if (normalized.startsWith("uploads/")) {
+    return `${origin}/api/${normalized}`;
+  }
+  if (normalized.startsWith("/")) {
+    return `${origin}${normalized}`;
+  }
+
+  return `${origin}/${normalized}`;
+};
+
+const normalizeBookingForResponse = (req, booking) => {
+  if (!booking) return booking;
+  const normalizedPickupLocation = {
+    address: booking.pickupLocation?.address || "",
+    coordinates: {
+      lat: Number.isFinite(Number(booking.pickupLocation?.coordinates?.lat))
+        ? Number(booking.pickupLocation.coordinates.lat)
+        : null,
+      lng: Number.isFinite(Number(booking.pickupLocation?.coordinates?.lng))
+        ? Number(booking.pickupLocation.coordinates.lng)
+        : null
+    }
+  };
+
+  if (!booking.vehicle) {
+    return {
+      ...booking,
+      pickupLocation: normalizedPickupLocation,
+      feedbackSubmitted: Boolean(booking.feedbackSubmitted || booking.feedback_submitted),
+      feedback_submitted: Boolean(booking.feedback_submitted || booking.feedbackSubmitted)
+    };
+  }
+
+  return {
+    ...booking,
+    pickupLocation: normalizedPickupLocation,
+    feedbackSubmitted: Boolean(booking.feedbackSubmitted || booking.feedback_submitted),
+    feedback_submitted: Boolean(booking.feedback_submitted || booking.feedbackSubmitted),
+    vehicle: {
+      ...booking.vehicle,
+      image: getPublicImageUrl(req, booking.vehicle.image)
+    }
+  };
+};
 
 // Middleware to check if MongoDB is connected
 const checkDB = (req, res, next) => {
@@ -19,7 +88,7 @@ const checkDB = (req, res, next) => {
 // Create a new booking
 router.post("/", checkDB, auth, async (req, res) => {
   try {
-    const { vehicleId, startDate, endDate } = req.body;
+    const { vehicleId, startDate, endDate, pickupLocation } = req.body;
     
     if (!vehicleId || !startDate || !endDate) {
       return res.status(400).json({ 
@@ -33,6 +102,21 @@ router.post("/", checkDB, auth, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid vehicle ID format"
+      });
+    }
+
+    const currentUser = await User.findById(req.user.id).select("isBlacklisted").lean();
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    if (currentUser.isBlacklisted) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is blocked from booking vehicles. Please contact support."
       });
     }
 
@@ -77,7 +161,18 @@ router.post("/", checkDB, auth, async (req, res) => {
       vehicle: vehicleId,
       startDate: start,
       endDate: end,
-      totalPrice
+      totalPrice,
+      pickupLocation: {
+        address: pickupLocation?.address || "",
+        coordinates: {
+          lat: Number.isFinite(Number(pickupLocation?.coordinates?.lat ?? pickupLocation?.lat))
+            ? Number(pickupLocation?.coordinates?.lat ?? pickupLocation?.lat)
+            : null,
+          lng: Number.isFinite(Number(pickupLocation?.coordinates?.lng ?? pickupLocation?.lng))
+            ? Number(pickupLocation?.coordinates?.lng ?? pickupLocation?.lng)
+            : null
+        }
+      }
     });
 
     const savedBooking = await booking.save();
@@ -85,11 +180,12 @@ router.post("/", checkDB, auth, async (req, res) => {
     // Populate details
     await savedBooking.populate("vehicle");
     await savedBooking.populate("user", "name email");
+    const bookingData = normalizeBookingForResponse(req, savedBooking.toObject());
     
     res.status(201).json({
       success: true,
       message: "Booking created successfully",
-      data: savedBooking
+      data: bookingData
     });
   } catch (err) {
     console.error("Create booking error:", err);
@@ -116,11 +212,12 @@ router.get("/", checkDB, auth, async (req, res) => {
       .populate("vehicle")
       .sort({ createdAt: -1 })
       .lean();
+    const normalizedBookings = bookings.map((b) => normalizeBookingForResponse(req, b));
     
     res.json({
       success: true,
-      count: bookings.length,
-      data: bookings
+      count: normalizedBookings.length,
+      data: normalizedBookings
     });
   } catch (err) {
     console.error("Get bookings error:", err);
@@ -139,11 +236,12 @@ router.get("/all", checkDB, auth, admin, async (req, res) => {
       .populate("user", "name email")
       .sort({ createdAt: -1 })
       .lean();
+    const normalizedBookings = bookings.map((b) => normalizeBookingForResponse(req, b));
     
     res.json({
       success: true,
-      count: bookings.length,
-      data: bookings
+      count: normalizedBookings.length,
+      data: normalizedBookings
     });
   } catch (err) {
     console.error("Get all bookings error:", err);
@@ -188,11 +286,12 @@ router.put("/:id/status", checkDB, auth, admin, async (req, res) => {
     
     await booking.populate("vehicle");
     await booking.populate("user", "name email");
+    const bookingData = normalizeBookingForResponse(req, booking.toObject());
     
     res.json({
       success: true,
       message: "Booking status updated",
-      data: booking
+      data: bookingData
     });
   } catch (err) {
     console.error("Update booking status error:", err);
@@ -243,11 +342,12 @@ router.put("/:id/cancel", checkDB, auth, async (req, res) => {
     
     await booking.populate("vehicle");
     await booking.populate("user", "name email");
+    const bookingData = normalizeBookingForResponse(req, booking.toObject());
     
     res.json({
       success: true,
       message: "Booking cancelled successfully",
-      data: booking
+      data: bookingData
     });
   } catch (err) {
     console.error("Cancel booking error:", err);
@@ -294,4 +394,3 @@ router.delete("/:id", checkDB, auth, admin, async (req, res) => {
 });
 
 module.exports = router;
-

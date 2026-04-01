@@ -1,20 +1,59 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useToast } from "../components/Toast";
-import api, { API_ORIGIN } from "../api/axios";
+import VehicleDetailsCard from "../components/VehicleDetailsCard";
+import VehicleAvailabilityMap from "../components/VehicleAvailabilityMap";
+import PickupLocationSelector from "../components/PickupLocationSelector";
+
+// Get API URL from environment or use default
+const getApiUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
+  // For development, try to detect if running on localhost
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:5000/api";
+  }
+  // For production, construct URL from current hostname
+  return `${window.location.protocol}//${window.location.host}/api`;
+};
+
+const API_URL = getApiUrl();
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
-  const normalizedPath = String(imagePath).trim();
-  if (!normalizedPath) return null;
-  if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
-  if (normalizedPath.startsWith("/uploads")) return `${API_ORIGIN}${normalizedPath}`;
-  if (normalizedPath.startsWith("uploads/")) return `${API_ORIGIN}/${normalizedPath}`;
-  return `${API_ORIGIN}/${normalizedPath.replace(/^\/+/, "")}`;
+  const normalizedPath = String(imagePath).trim().replace(/\\/g, "/");
+  if (normalizedPath.startsWith("http")) return normalizedPath;
+  
+  const apiOrigin = API_URL.replace(/\/api\/?$/, "");
+  const apiBase = API_URL.replace(/\/$/, "");
+
+  // Route uploaded files through /api/uploads for proxy-based deployments
+  if (normalizedPath.startsWith("/uploads")) {
+    return `${apiBase}${normalizedPath}`;
+  }
+
+  if (normalizedPath.startsWith("uploads/")) {
+    return `${apiBase}/${normalizedPath}`;
+  }
+
+  if (normalizedPath.startsWith("/")) {
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return `${apiOrigin}/${normalizedPath}`;
 };
+
+// Axios instance with timeout
+const api = axios.create({
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json"
+  }
+});
 
 function Home() {
   const [vehicles, setVehicles] = useState([]);
@@ -31,6 +70,13 @@ function Home() {
   const [endDate, setEndDate] = useState(new Date());
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [pickupLocation, setPickupLocation] = useState({
+    address: "",
+    lat: null,
+    lng: null
+  });
+  const [userLocation, setUserLocation] = useState(null);
+  const [vehicleLocations, setVehicleLocations] = useState([]);
   
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -47,7 +93,7 @@ function Home() {
       if (maxPrice) params.append("maxPrice", maxPrice);
       if (brand) params.append("brand", brand);
 
-      const res = await api.get(`/vehicles?${params}`);
+      const res = await api.get(`${API_URL}/vehicles?${params}`);
       
       // Handle new response format
       const vehiclesData = res.data.data || res.data;
@@ -70,6 +116,34 @@ function Home() {
 
   useEffect(() => {
     fetchVehicles(true);
+    fetchVehicleLocations();
+  }, []);
+
+  const fetchVehicleLocations = async () => {
+    try {
+      const response = await api.get(`${API_URL}/vehicles/locations`);
+      const locationsData = response.data?.data || [];
+      setVehicleLocations(locationsData);
+    } catch (err) {
+      setVehicleLocations([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+      },
+      () => {
+        setUserLocation(null);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }, []);
 
   const handleSearch = (e) => {
@@ -98,21 +172,35 @@ function Home() {
       return;
     }
 
+    if (!pickupLocation.address) {
+      setBookingError("Please set a pickup location before confirming the booking");
+      return;
+    }
+
     try {
       setBookingLoading(true);
       setBookingError("");
       
-      const res = await api.post(
-        "/bookings",
+      await api.post(
+        `${API_URL}/bookings`,
         {
           vehicleId: selectedVehicle._id,
           startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
+          endDate: endDate.toISOString(),
+          pickupLocation
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
       addToast("Booking successful!", "success");
       setSelectedVehicle(null);
+      setPickupLocation({
+        address: "",
+        lat: null,
+        lng: null
+      });
       navigate("/bookings");
     } catch (err) {
       console.error("Booking error:", err);
@@ -169,6 +257,8 @@ function Home() {
           </form>
         </div>
 
+        <VehicleAvailabilityMap userLocation={userLocation} vehicles={vehicleLocations} />
+
         {error && (
           <div className="alert alert-error">{error}</div>
         )}
@@ -197,6 +287,7 @@ function Home() {
                       <p className="vehicle-price">
                         ₹{vehicle.pricePerDay} <span>/ day</span>
                       </p>
+                      <VehicleDetailsCard vehicle={vehicle} />
                       <div className="vehicle-actions">
                         <button
                           className="btn btn-primary"
@@ -264,7 +355,13 @@ function Home() {
                   />
                 </div>
 
+                <PickupLocationSelector
+                  value={pickupLocation}
+                  onChange={(nextLocation) => setPickupLocation(nextLocation)}
+                />
+
                 <div className="booking-card" style={{ marginTop: "1rem" }}>
+                  <VehicleDetailsCard vehicle={selectedVehicle} />
                   <div className="d-flex justify-between align-center">
                     <span>Price per day:</span>
                     <span>₹{selectedVehicle.pricePerDay}</span>
@@ -272,6 +369,10 @@ function Home() {
                   <div className="d-flex justify-between align-center mt-1">
                     <span>Number of days:</span>
                     <span>{calculateDays()}</span>
+                  </div>
+                  <div className="d-flex justify-between align-center mt-1">
+                    <span>Pickup:</span>
+                    <span>{pickupLocation.address || "Not set"}</span>
                   </div>
                   <hr style={{ margin: "1rem 0" }} />
                   <div className="d-flex justify-between align-center">

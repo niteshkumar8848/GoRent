@@ -2,10 +2,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const path = require("path");
 require("dotenv").config();
 
 const app = express();
+app.set("trust proxy", 1);
 
 /* ==============================
    ENVIRONMENT VARIABLE VALIDATION
@@ -59,8 +59,8 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 /* ==============================
    STATIC FILES
 ================================= */
-const uploadsDir = path.join(__dirname, "uploads");
-app.use("/uploads", express.static(uploadsDir));
+app.use("/uploads", express.static("uploads"));
+app.use("/api/uploads", express.static("uploads"));
 
 /* ==============================
    DATABASE CONNECTION
@@ -221,6 +221,8 @@ app.post("/api/admin/reset", async (req, res) => {
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/vehicles", require("./routes/vehicleRoutes"));
 app.use("/api/bookings", require("./routes/bookingRoutes"));
+app.use("/api/feedback", require("./routes/feedbackRoutes"));
+app.use("/api/location", require("./routes/locationRoutes"));
 
 /* ==============================
    404 HANDLER

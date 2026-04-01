@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import api from "../api/axios";
+import axios from "axios";
 import { useToast } from "../components/Toast";
+
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 function UserDashboard() {
   const [activeTab, setActiveTab] = useState("profile");
@@ -18,6 +20,12 @@ function UserDashboard() {
   });
   const [profileLoading, setProfileLoading] = useState(false);
 
+  const token = localStorage.getItem("token");
+  const config = {
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10000 // 10 second timeout
+  };
+
   useEffect(() => {
     fetchUserProfile();
   }, []);
@@ -25,7 +33,7 @@ function UserDashboard() {
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/auth/me");
+      const res = await axios.get(`${API_URL}/auth/me`, config);
       
       // Handle both old and new response formats
       const userData = res.data.data || res.data;
@@ -68,7 +76,7 @@ function UserDashboard() {
         newPassword: profileForm.newPassword
       };
 
-      const res = await api.put("/auth/me", updateData);
+      const res = await axios.put(`${API_URL}/auth/me`, updateData, config);
       
       addToast(res.data?.message || "Profile updated successfully", "success");
       
@@ -81,8 +89,8 @@ function UserDashboard() {
       }));
       
       // Update localStorage with new user info
-      if (res.data.data) {
-        localStorage.setItem("user", JSON.stringify(res.data.data));
+      if (res.data.user) {
+        localStorage.setItem("user", JSON.stringify(res.data.user));
       }
       
       // Refresh user profile
@@ -207,3 +215,4 @@ function UserDashboard() {
 }
 
 export default UserDashboard;
+
