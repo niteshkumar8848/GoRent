@@ -1182,6 +1182,14 @@ body::before {
   background: white;
 }
 
+.react-datepicker-popper {
+  z-index: 2500 !important;
+}
+
+.react-datepicker {
+  z-index: 2501;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .navbar-container {
@@ -1874,6 +1882,26 @@ input[type="file"]:focus {
   width: 100%;
   height: 250px;
   border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+}
+
+.pickup-map-canvas .leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.pickup-map-canvas .leaflet-pane,
+.pickup-map-canvas .leaflet-control {
+  z-index: 1;
+}
+
+.pickup-map-canvas .leaflet-top,
+.pickup-map-canvas .leaflet-bottom {
+  z-index: 2;
 }
 
 .pickup-helper-text {
