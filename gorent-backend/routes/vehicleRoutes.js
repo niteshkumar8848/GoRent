@@ -289,9 +289,7 @@ router.get("/:id/image", checkDB, async (req, res) => {
       });
     }
 
-    const vehicle = await Vehicle.findById(id)
-      .select("imageData imageMimeType imageEncoding")
-      .lean();
+    const vehicle = await Vehicle.findById(id).select("imageData imageMimeType imageEncoding");
 
     if (!vehicle || !vehicle.imageData) {
       return res.status(404).json({
@@ -300,11 +298,30 @@ router.get("/:id/image", checkDB, async (req, res) => {
       });
     }
 
-    const rawImage = Buffer.from(vehicle.imageData);
-    const imageBuffer = vehicle.imageEncoding === "gzip" ? zlib.gunzipSync(rawImage) : rawImage;
+    let rawImage;
+    if (Buffer.isBuffer(vehicle.imageData)) {
+      rawImage = vehicle.imageData;
+    } else if (vehicle.imageData?.buffer) {
+      rawImage = Buffer.from(vehicle.imageData.buffer);
+    } else if (typeof vehicle.imageData === "string") {
+      rawImage = Buffer.from(vehicle.imageData, "base64");
+    } else {
+      rawImage = Buffer.from(vehicle.imageData);
+    }
+
+    let imageBuffer = rawImage;
+    if (vehicle.imageEncoding === "gzip") {
+      try {
+        imageBuffer = zlib.gunzipSync(rawImage);
+      } catch (decodeErr) {
+        console.error("Failed to gunzip vehicle image, falling back to raw buffer:", decodeErr.message);
+        imageBuffer = rawImage;
+      }
+    }
 
     res.setHeader("Content-Type", vehicle.imageMimeType || "application/octet-stream");
     res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Content-Length", String(imageBuffer.length));
     return res.send(imageBuffer);
   } catch (err) {
     console.error("Error fetching vehicle image:", err);
