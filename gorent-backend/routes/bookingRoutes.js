@@ -39,6 +39,14 @@ const getPublicImageUrl = (req, imagePath) => {
   return `${origin}/${normalized}`;
 };
 
+const getVehicleImageUrl = (req, vehicle) => {
+  if (vehicle?.imageData && vehicle?._id) {
+    const origin = getRequestOrigin(req);
+    return `${origin}/api/vehicles/${vehicle._id}/image`;
+  }
+  return getPublicImageUrl(req, vehicle?.image || "");
+};
+
 const normalizeBookingForResponse = (req, booking) => {
   if (!booking) return booking;
   const normalizedPickupLocation = {
@@ -69,7 +77,10 @@ const normalizeBookingForResponse = (req, booking) => {
     feedback_submitted: Boolean(booking.feedback_submitted || booking.feedbackSubmitted),
     vehicle: {
       ...booking.vehicle,
-      image: getPublicImageUrl(req, booking.vehicle.image)
+      imageData: undefined,
+      imageMimeType: undefined,
+      imageEncoding: undefined,
+      image: getVehicleImageUrl(req, booking.vehicle)
     }
   };
 };

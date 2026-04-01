@@ -6,6 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const mongoose = require("mongoose");
+const zlib = require("zlib");
 
 const VALID_FUEL_TYPES = ["Petrol", "Diesel", "Electric", "CNG", "Hybrid"];
 const VALID_CATEGORIES = ["Hatchback", "Sedan", "SUV", "Jeep", "Van", "Auto"];
@@ -43,8 +44,22 @@ const getPublicImageUrl = (req, imagePath) => {
   return `${origin}/${normalized}`;
 };
 
+const getVehicleImageUrl = (req, vehicle) => {
+  if (vehicle?.imageData && vehicle?._id) {
+    const origin = getRequestOrigin(req);
+    return `${origin}/api/vehicles/${vehicle._id}/image`;
+  }
+  return getPublicImageUrl(req, vehicle?.image || "");
+};
+
 const normalizeVehicleForResponse = (req, vehicle) => {
   if (!vehicle) return vehicle;
+  const {
+    imageData,
+    imageMimeType,
+    imageEncoding,
+    ...vehicleWithoutBinary
+  } = vehicle;
   const normalizedPickupLocations = Array.isArray(vehicle.pickup_locations)
     ? vehicle.pickup_locations
         .filter((location) => Number.isFinite(Number(location?.lat)) && Number.isFinite(Number(location?.lng)))
@@ -56,7 +71,7 @@ const normalizeVehicleForResponse = (req, vehicle) => {
     : [];
 
   return {
-    ...vehicle,
+    ...vehicleWithoutBinary,
     seats: Number.isFinite(vehicle.seats) ? vehicle.seats : null,
     fuelType: vehicle.fuelType || vehicle.fuel_type || "",
     fuel_type: vehicle.fuel_type || vehicle.fuelType || "",
@@ -64,7 +79,7 @@ const normalizeVehicleForResponse = (req, vehicle) => {
     ac: typeof vehicle.ac === "boolean" ? vehicle.ac : true,
     luggage_capacity: vehicle.luggage_capacity || "",
     pickup_locations: normalizedPickupLocations,
-    image: getPublicImageUrl(req, vehicle.image)
+    image: getVehicleImageUrl(req, vehicle)
   };
 };
 
@@ -124,22 +139,6 @@ const checkDB = (req, res, next) => {
   next();
 };
 
-// Configure multer for local file storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = "uploads/vehicles";
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "_" + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, "vehicle_" + uniqueSuffix + ext);
-  }
-});
-
 const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
@@ -149,7 +148,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ 
-  storage: storage,
+  storage: multer.memoryStorage(),
   fileFilter: fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }
 });
@@ -288,6 +287,44 @@ router.get("/:id", checkDB, async (req, res) => {
   }
 });
 
+// Get vehicle image bytes from database
+router.get("/:id/image", checkDB, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
+    }
+
+    const vehicle = await Vehicle.findById(id)
+      .select("imageData imageMimeType imageEncoding")
+      .lean();
+
+    if (!vehicle || !vehicle.imageData) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle image not found"
+      });
+    }
+
+    const rawImage = Buffer.from(vehicle.imageData);
+    const imageBuffer = vehicle.imageEncoding === "gzip" ? zlib.gunzipSync(rawImage) : rawImage;
+
+    res.setHeader("Content-Type", vehicle.imageMimeType || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.send(imageBuffer);
+  } catch (err) {
+    console.error("Error fetching vehicle image:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching vehicle image"
+    });
+  }
+});
+
 // Add Vehicle (Admin Only)
 router.post("/", checkDB, auth, admin, upload.single("image"), handleMulterError, async (req, res) => {
   try {
@@ -329,9 +366,14 @@ router.post("/", checkDB, auth, admin, upload.single("image"), handleMulterError
     }
 
     let imageUrl = "";
-    
+    let imageData = null;
+    let imageMimeType = "";
+    let imageEncoding = "";
+
     if (req.file) {
-      imageUrl = `/uploads/vehicles/${req.file.filename}`;
+      imageData = zlib.gzipSync(req.file.buffer);
+      imageMimeType = req.file.mimetype || "application/octet-stream";
+      imageEncoding = "gzip";
     }
 
     const resolvedFuelType = fuelType || fuel_type || "";
@@ -369,6 +411,9 @@ router.post("/", checkDB, auth, admin, upload.single("image"), handleMulterError
       luggage_capacity: luggage_capacity || "",
       pickup_locations: resolvedPickupLocations,
       image: imageUrl,
+      imageData,
+      imageMimeType,
+      imageEncoding,
       available: available === undefined ? true : (available === true || available === "true" || available === "on")
     });
 
@@ -500,7 +545,10 @@ router.put("/:id", checkDB, auth, admin, upload.single("image"), handleMulterErr
           try { fs.unlinkSync(oldImagePath); } catch (e) { console.error(e); }
         }
       }
-      vehicle.image = `/uploads/vehicles/${req.file.filename}`;
+      vehicle.image = "";
+      vehicle.imageData = zlib.gzipSync(req.file.buffer);
+      vehicle.imageMimeType = req.file.mimetype || "application/octet-stream";
+      vehicle.imageEncoding = "gzip";
     }
 
     const updatedVehicle = await vehicle.save();
@@ -554,6 +602,12 @@ router.delete("/:id", checkDB, auth, admin, async (req, res) => {
       if (imagePath && fs.existsSync(imagePath)) {
         try { fs.unlinkSync(imagePath); } catch (e) { console.error(e); }
       }
+    }
+
+    if (vehicle.imageData) {
+      vehicle.imageData = null;
+      vehicle.imageMimeType = "";
+      vehicle.imageEncoding = "";
     }
 
     await vehicle.deleteOne();
