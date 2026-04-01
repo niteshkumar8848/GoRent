@@ -87,7 +87,7 @@ function Navbar() {
             {token ? (
               <>
                 <span>Welcome, {user?.name || "User"}</span>
-                <button onClick={handleLogout} className="btn btn-outline btn-sm">
+                <button onClick={handleLogout} className="btn btn-danger btn-sm">
                   Logout
                 </button>
               </>
