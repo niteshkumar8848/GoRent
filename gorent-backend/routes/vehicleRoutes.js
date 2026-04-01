@@ -11,13 +11,6 @@ const zlib = require("zlib");
 const VALID_FUEL_TYPES = ["Petrol", "Diesel", "Electric", "CNG", "Hybrid"];
 const VALID_CATEGORIES = ["Hatchback", "Sedan", "SUV", "Jeep", "Van", "Auto"];
 
-const getRequestOrigin = (req) => {
-  const forwardedProto = req.headers["x-forwarded-proto"];
-  const protocol = (typeof forwardedProto === "string" ? forwardedProto.split(",")[0] : req.protocol) || "http";
-  const host = req.get("host");
-  return `${protocol}://${host}`;
-};
-
 const getPublicImageUrl = (req, imagePath) => {
   if (!imagePath) return "";
   const normalized = String(imagePath).trim().replace(/\\/g, "/");
@@ -26,28 +19,25 @@ const getPublicImageUrl = (req, imagePath) => {
     return normalized;
   }
 
-  const origin = getRequestOrigin(req);
-
   if (normalized.startsWith("/api/uploads/")) {
-    return `${origin}${normalized}`;
+    return normalized;
   }
   if (normalized.startsWith("/uploads/")) {
-    return `${origin}/api${normalized}`;
+    return `/api${normalized}`;
   }
   if (normalized.startsWith("uploads/")) {
-    return `${origin}/api/${normalized}`;
+    return `/api/${normalized}`;
   }
   if (normalized.startsWith("/")) {
-    return `${origin}${normalized}`;
+    return normalized;
   }
 
-  return `${origin}/${normalized}`;
+  return `/${normalized}`;
 };
 
 const getVehicleImageUrl = (req, vehicle) => {
   if (vehicle?.imageData && vehicle?._id) {
-    const origin = getRequestOrigin(req);
-    return `${origin}/api/vehicles/${vehicle._id}/image`;
+    return `/api/vehicles/${vehicle._id}/image`;
   }
   return getPublicImageUrl(req, vehicle?.image || "");
 };
