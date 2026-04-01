@@ -260,6 +260,11 @@ body::before {
   padding: 0 24px;
 }
 
+.navbar-top {
+  display: flex;
+  align-items: center;
+}
+
 .navbar-brand {
   font-size: 1.5rem;
   font-weight: 800;
@@ -284,6 +289,42 @@ body::before {
   display: flex;
   align-items: center;
   gap: 2rem;
+}
+
+.navbar-menu-toggle {
+  display: none;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--light-tertiary);
+  border-radius: 11px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  transition: all var(--transition);
+}
+
+.navbar-menu-toggle span {
+  width: 18px;
+  height: 2px;
+  background: var(--dark-color);
+  border-radius: var(--radius-full);
+  transition: all var(--transition);
+}
+
+.navbar-menu-toggle.open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.navbar-menu-toggle.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.navbar-menu-toggle.open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
 }
 
 .navbar-link {
@@ -1144,15 +1185,83 @@ body::before {
 /* Responsive */
 @media (max-width: 768px) {
   .navbar-container {
-    flex-direction: column;
-    gap: 1rem;
+    display: block;
     padding: 0 1rem;
   }
 
+  .navbar-top {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .navbar-logo {
+    height: 38px;
+  }
+
+  .navbar-menu-toggle {
+    display: inline-flex;
+  }
+
   .navbar-menu {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 1rem;
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-8px);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin-top: 0;
+    padding: 0;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    border: 1px solid transparent;
+    box-shadow: none;
+    transition: max-height 260ms ease, opacity 200ms ease, transform 200ms ease, margin 200ms ease, padding 200ms ease;
+  }
+
+  .navbar-menu.open {
+    max-height: 80vh;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border-color: var(--card-border);
+    box-shadow: var(--shadow-md);
+  }
+
+  .navbar-link {
+    width: 100%;
+    padding: 0.7rem 0.8rem;
+    border-radius: var(--radius);
+  }
+
+  .navbar-link:hover,
+  .navbar-link.active {
+    background: rgba(99, 102, 241, 0.08);
+  }
+
+  .navbar-link::after {
+    display: none;
+  }
+
+  .navbar-user {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--light-tertiary);
+  }
+
+  .navbar-user span {
+    font-size: 0.875rem;
+    padding: 0 0.2rem 0.15rem;
+  }
+
+  .navbar-user .btn {
+    width: 100%;
   }
 
   .vehicle-grid {
