@@ -88,12 +88,21 @@ const checkDB = (req, res, next) => {
 // Create a new booking
 router.post("/", checkDB, auth, async (req, res) => {
   try {
-    const { vehicleId, startDate, endDate, pickupLocation } = req.body;
+    const { vehicleId, startDate, endDate, pickupLocation, contactNumber } = req.body;
     
-    if (!vehicleId || !startDate || !endDate) {
+    if (!vehicleId || !startDate || !endDate || !contactNumber) {
       return res.status(400).json({ 
         success: false,
-        message: "Please provide all required fields (vehicleId, startDate, endDate)" 
+        message: "Please provide all required fields (vehicleId, startDate, endDate, contactNumber)" 
+      });
+    }
+
+    const normalizedContactNumber = String(contactNumber).replace(/[\s()-]/g, "").trim();
+    const contactRegex = /^\+?[0-9]{7,15}$/;
+    if (!contactRegex.test(normalizedContactNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid contact number"
       });
     }
 
@@ -162,6 +171,7 @@ router.post("/", checkDB, auth, async (req, res) => {
       startDate: start,
       endDate: end,
       totalPrice,
+      contactNumber: normalizedContactNumber,
       pickupLocation: {
         address: pickupLocation?.address || "",
         coordinates: {

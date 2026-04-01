@@ -70,6 +70,7 @@ function Home() {
   const [endDate, setEndDate] = useState(new Date());
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
   const [pickupLocation, setPickupLocation] = useState({
     address: "",
     lat: null,
@@ -187,6 +188,12 @@ function Home() {
       return;
     }
 
+    const normalizedContactNumber = contactNumber.replace(/[\s()-]/g, "").trim();
+    if (!/^\+?[0-9]{7,15}$/.test(normalizedContactNumber)) {
+      setBookingError("Please enter a valid mobile number");
+      return;
+    }
+
     try {
       setBookingLoading(true);
       setBookingError("");
@@ -197,7 +204,8 @@ function Home() {
           vehicleId: selectedVehicle._id,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
-          pickupLocation
+          pickupLocation,
+          contactNumber: normalizedContactNumber
         },
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -211,6 +219,7 @@ function Home() {
         lat: null,
         lng: null
       });
+      setContactNumber("");
       navigate("/bookings");
     } catch (err) {
       console.error("Booking error:", err);
@@ -390,6 +399,18 @@ function Home() {
                     className="form-input"
                     dateFormat="MMM dd, yyyy"
                   />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    type="tel"
+                    className="form-input"
+                    placeholder="Enter your mobile number"
+                    value={contactNumber}
+                    onChange={(e) => setContactNumber(e.target.value)}
+                  />
+                  <small className="form-hint">This number will be visible to admin for booking coordination.</small>
                 </div>
 
                 <PickupLocationSelector

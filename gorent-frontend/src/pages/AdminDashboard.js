@@ -626,6 +626,7 @@ function AdminDashboard() {
                   <tr>
                     <th>Vehicle</th>
                     <th>User</th>
+                    <th>Contact</th>
                     <th>Dates</th>
                     <th>Total</th>
                     <th>Status</th>
@@ -644,6 +645,13 @@ function AdminDashboard() {
                         {booking.user?.name || "N/A"}
                         <br />
                         <small>{booking.user?.email}</small>
+                      </td>
+                      <td>
+                        {booking.contactNumber ? (
+                          <a href={`tel:${booking.contactNumber}`}>{booking.contactNumber}</a>
+                        ) : (
+                          <span className="text-muted">N/A</span>
+                        )}
                       </td>
                       <td>
                         {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
