@@ -81,7 +81,10 @@ function Home() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  const fetchVehicles = async (showLoading = true) => {
+  const fetchVehicles = async (
+    showLoading = true,
+    filters = { search, maxPrice, brand }
+  ) => {
     try {
       if (showLoading) {
         setLoading(true);
@@ -89,9 +92,9 @@ function Home() {
       setError("");
       
       const params = new URLSearchParams();
-      if (search) params.append("search", search);
-      if (maxPrice) params.append("maxPrice", maxPrice);
-      if (brand) params.append("brand", brand);
+      if (filters.search) params.append("search", filters.search);
+      if (filters.maxPrice) params.append("maxPrice", filters.maxPrice);
+      if (filters.brand) params.append("brand", filters.brand);
 
       const res = await api.get(`${API_URL}/vehicles?${params}`);
       
@@ -149,6 +152,13 @@ function Home() {
   const handleSearch = (e) => {
     e.preventDefault();
     fetchVehicles();
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setBrand("");
+    setMaxPrice("");
+    fetchVehicles(true, { search: "", maxPrice: "", brand: "" });
   };
 
   const calculateDays = () => {
@@ -225,35 +235,62 @@ function Home() {
         </div>
 
         <div className="search-filter">
+          <div className="filter-header">
+            <h2 className="filter-title">Filter Vehicles</h2>
+            <p className="filter-subtitle">Refine results by keyword, brand, and budget.</p>
+          </div>
           <form onSubmit={handleSearch} className="search-filters">
-            <input
-              type="text"
-              placeholder="Search vehicles..."
-              className="form-input search-input"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select
-              className="filter-select"
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
-            >
-              <option value="">All Brands</option>
-              {brands.map(b => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              placeholder="Max Price per Day"
-              className="form-input"
-              style={{ maxWidth: "200px" }}
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-            />
-            <button type="submit" className="btn btn-primary">
-              Search
-            </button>
+            <div className="filter-field filter-field-search">
+              <label htmlFor="vehicle-search" className="filter-label">Search</label>
+              <input
+                id="vehicle-search"
+                type="text"
+                placeholder="Search vehicles..."
+                className="form-input search-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <div className="filter-field">
+              <label htmlFor="brand-filter" className="filter-label">Brand</label>
+              <select
+                id="brand-filter"
+                className="filter-select"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+              >
+                <option value="">All Brands</option>
+                {brands.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="filter-field">
+              <label htmlFor="price-filter" className="filter-label">Max Price/Day</label>
+              <input
+                id="price-filter"
+                type="number"
+                placeholder="e.g. 1200"
+                className="form-input"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+              />
+            </div>
+
+            <div className="filter-actions">
+              <button type="submit" className="btn btn-primary">
+                Search
+              </button>
+              <button
+                type="button"
+                className="btn filter-clear-btn"
+                onClick={handleClearFilters}
+              >
+                Clear
+              </button>
+            </div>
           </form>
         </div>
 
