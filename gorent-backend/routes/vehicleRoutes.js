@@ -36,10 +36,18 @@ const getPublicImageUrl = (req, imagePath) => {
 };
 
 const getVehicleImageUrl = (req, vehicle) => {
+  const version = vehicle?.imageUpdatedAt
+    ? new Date(vehicle.imageUpdatedAt).getTime()
+    : null;
+
   if (vehicle?.imageData && vehicle?._id) {
-    return `/api/vehicles/${vehicle._id}/image`;
+    return version
+      ? `/api/vehicles/${vehicle._id}/image?v=${version}`
+      : `/api/vehicles/${vehicle._id}/image`;
   }
-  return getPublicImageUrl(req, vehicle?.image || "");
+  const fallbackImage = getPublicImageUrl(req, vehicle?.image || "");
+  if (!fallbackImage) return fallbackImage;
+  return version ? `${fallbackImage}${fallbackImage.includes("?") ? "&" : "?"}v=${version}` : fallbackImage;
 };
 
 const normalizeVehicleForResponse = (req, vehicle) => {
@@ -320,7 +328,9 @@ router.get("/:id/image", checkDB, async (req, res) => {
     }
 
     res.setHeader("Content-Type", vehicle.imageMimeType || "application/octet-stream");
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.setHeader("Content-Length", String(imageBuffer.length));
     return res.send(imageBuffer);
   } catch (err) {
@@ -376,11 +386,13 @@ router.post("/", checkDB, auth, admin, upload.single("image"), handleMulterError
     let imageData = null;
     let imageMimeType = "";
     let imageEncoding = "";
+    let imageUpdatedAt = null;
 
     if (req.file) {
       imageData = zlib.gzipSync(req.file.buffer);
       imageMimeType = req.file.mimetype || "application/octet-stream";
       imageEncoding = "gzip";
+      imageUpdatedAt = new Date();
     }
 
     const resolvedFuelType = fuelType || fuel_type || "";
@@ -421,6 +433,7 @@ router.post("/", checkDB, auth, admin, upload.single("image"), handleMulterError
       imageData,
       imageMimeType,
       imageEncoding,
+      imageUpdatedAt,
       available: available === undefined ? true : (available === true || available === "true" || available === "on")
     });
 
@@ -556,6 +569,7 @@ router.put("/:id", checkDB, auth, admin, upload.single("image"), handleMulterErr
       vehicle.imageData = zlib.gzipSync(req.file.buffer);
       vehicle.imageMimeType = req.file.mimetype || "application/octet-stream";
       vehicle.imageEncoding = "gzip";
+      vehicle.imageUpdatedAt = new Date();
     }
 
     const updatedVehicle = await vehicle.save();

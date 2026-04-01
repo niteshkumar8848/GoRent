@@ -31,10 +31,18 @@ const getPublicImageUrl = (req, imagePath) => {
 };
 
 const getVehicleImageUrl = (req, vehicle) => {
+  const version = vehicle?.imageUpdatedAt
+    ? new Date(vehicle.imageUpdatedAt).getTime()
+    : null;
+
   if (vehicle?.imageData && vehicle?._id) {
-    return `/api/vehicles/${vehicle._id}/image`;
+    return version
+      ? `/api/vehicles/${vehicle._id}/image?v=${version}`
+      : `/api/vehicles/${vehicle._id}/image`;
   }
-  return getPublicImageUrl(req, vehicle?.image || "");
+  const fallbackImage = getPublicImageUrl(req, vehicle?.image || "");
+  if (!fallbackImage) return fallbackImage;
+  return version ? `${fallbackImage}${fallbackImage.includes("?") ? "&" : "?"}v=${version}` : fallbackImage;
 };
 
 const normalizeBookingForResponse = (req, booking) => {
