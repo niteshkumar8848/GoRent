@@ -88,7 +88,7 @@ function AdminDashboard() {
   const token = localStorage.getItem("token");
   const config = {
     headers: { Authorization: `Bearer ${token}` },
-    timeout: 10000 // 10 second timeout
+    timeout: 30000 // 30 second timeout for production stability
   };
   const uploadConfig = {
     headers: {
@@ -255,7 +255,6 @@ function AdminDashboard() {
 
     const refreshAdminData = () => {
       fetchBookings(false);
-      fetchUsers(false);
       fetchFeedbackSummary(false);
     };
 
@@ -265,9 +264,7 @@ function AdminDashboard() {
       "booking:cancelled",
       "booking:payment_submitted",
       "booking:payment_verified",
-      "booking:deleted",
-      "system:api_request",
-      "system:api_response"
+      "booking:deleted"
     ];
 
     events.forEach((eventName) => socket.on(eventName, refreshAdminData));
@@ -287,11 +284,25 @@ function AdminDashboard() {
     setBookings(updatedBookings);
     
     try {
-      const res = await axios.put(
-        `${API_URL}/bookings/${bookingId}/status`,
-        { status },
-        config
-      );
+      let res;
+      try {
+        res = await axios.put(
+          `${API_URL}/bookings/${bookingId}/status`,
+          { status },
+          { ...config, timeout: 60000 }
+        );
+      } catch (err) {
+        // Single retry for occasional cold-start / transient timeout in production
+        if (err.code === "ECONNABORTED") {
+          res = await axios.put(
+            `${API_URL}/bookings/${bookingId}/status`,
+            { status },
+            { ...config, timeout: 60000 }
+          );
+        } else {
+          throw err;
+        }
+      }
       // Success
       addToast(res.data?.message || `Booking ${status} successfully`, "success");
     } catch (err) {
