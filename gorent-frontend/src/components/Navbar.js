@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "./ThemeProvider";
+import { getStoredToken, getStoredUser } from "../utils/authStorage";
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const token = getStoredToken();
+  const user = getStoredUser();
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import PropTypes from "prop-types";
+import { getStoredUser } from "../utils/authStorage";
 
 const FEEDBACK_TAGS = [
   "Clean Vehicle",
@@ -29,7 +30,7 @@ function RideFeedback({ booking, loading, onSubmit, onSkip }) {
   const handleSubmit = () => {
     if (rating < 1) return;
 
-    const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+    const currentUser = getStoredUser();
     onSubmit({
       booking_id: booking._id,
       vehicle_id: booking?.vehicle?._id,
