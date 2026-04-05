@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ToastProvider from "./components/Toast";
 import ConfirmDialogProvider from "./components/ConfirmDialog";
 import ThemeProvider from "./components/ThemeProvider";
+import { connectSocket, disconnectSocket } from "./utils/socket";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -17,6 +19,27 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 
 function App() {
+  useEffect(() => {
+    const syncSocketAuth = () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        disconnectSocket();
+        return;
+      }
+      connectSocket(token);
+    };
+
+    syncSocketAuth();
+    window.addEventListener("auth-changed", syncSocketAuth);
+    window.addEventListener("storage", syncSocketAuth);
+
+    return () => {
+      window.removeEventListener("auth-changed", syncSocketAuth);
+      window.removeEventListener("storage", syncSocketAuth);
+      disconnectSocket();
+    };
+  }, []);
+
   return (
     <ThemeProvider>
       <ToastProvider>

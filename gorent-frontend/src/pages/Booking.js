@@ -3,6 +3,9 @@ import axios from "axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
 import RideFeedback from "../components/RideFeedback";
+import BookingPaymentModal from "../components/BookingPaymentModal";
+import CashPaymentPendingModal from "../components/CashPaymentPendingModal";
+import { connectSocket } from "../utils/socket";
 
 // Get API URL from environment or use default
 const getApiUrl = () => {
@@ -46,20 +49,70 @@ function Bookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(null);
+  const [paymentRide, setPaymentRide] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [dismissedPaymentRideIds, setDismissedPaymentRideIds] = useState([]);
   const [feedbackRide, setFeedbackRide] = useState(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [dismissedRideIds, setDismissedRideIds] = useState([]);
+  const [cashPendingBooking, setCashPendingBooking] = useState(null);
   const { addToast } = useToast();
   const { confirm } = useConfirmDialog();
+  const paymentGatewayUrls = {
+    esewa: "https://esewa.com.np/#/home",
+    khalti: "https://khalti.com/",
+    mobile_banking: "https://ebanking.nabilbank.com/"
+  };
 
   useEffect(() => {
     fetchBookings(true);
   }, []);
 
   useEffect(() => {
+    const socket = connectSocket(localStorage.getItem("token"));
+    if (!socket) return undefined;
+
+    const refreshBookings = () => {
+      fetchBookings(false);
+    };
+
+    const events = [
+      "booking:created",
+      "booking:status_updated",
+      "booking:cancelled",
+      "booking:payment_submitted",
+      "booking:payment_verified",
+      "booking:deleted"
+    ];
+
+    events.forEach((eventName) => socket.on(eventName, refreshBookings));
+
+    return () => {
+      events.forEach((eventName) => socket.off(eventName, refreshBookings));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (paymentRide) return;
+    const pendingPaymentRide = bookings.find(
+      (booking) => booking.status === "completed"
+        && booking.paymentStatus !== "paid"
+        && !dismissedPaymentRideIds.includes(booking._id)
+    );
+
+    if (pendingPaymentRide) {
+      setPaymentRide(pendingPaymentRide);
+      setPaymentMethod(pendingPaymentRide.paymentMethod || "");
+    }
+  }, [bookings, paymentRide, dismissedPaymentRideIds]);
+
+  useEffect(() => {
+    if (paymentRide) return;
     if (feedbackRide) return;
     const pendingFeedbackRide = bookings.find(
       (booking) => booking.status === "completed"
+        && booking.paymentStatus === "paid"
         && !booking.feedbackSubmitted
         && !booking.feedback_submitted
         && !dismissedRideIds.includes(booking._id)
@@ -67,7 +120,7 @@ function Bookings() {
     if (pendingFeedbackRide) {
       setFeedbackRide(pendingFeedbackRide);
     }
-  }, [bookings, feedbackRide, dismissedRideIds]);
+  }, [bookings, paymentRide, feedbackRide, dismissedRideIds]);
 
   const fetchBookings = async (showLoading = true) => {
     try {
@@ -194,6 +247,58 @@ function Bookings() {
     }
   };
 
+  const handlePayment = async () => {
+    if (!paymentRide?._id) return;
+
+    try {
+      setPaymentLoading(true);
+      const token = localStorage.getItem("token");
+      const response = await axios.put(
+        `${API_URL}/bookings/${paymentRide._id}/payment`,
+        { method: paymentMethod },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 10000
+        }
+      );
+      addToast(response.data?.message || "Payment completed successfully", "success");
+      if (paymentMethod === "cash") {
+        setCashPendingBooking(response.data?.data || paymentRide);
+      }
+      setPaymentRide(null);
+      fetchBookings(false);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Unable to process payment right now", "error");
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handlePaymentLater = () => {
+    if (!paymentRide?._id) return;
+    setDismissedPaymentRideIds((prev) => [...prev, paymentRide._id]);
+    setPaymentRide(null);
+  };
+
+  const handlePaymentMethodChange = (method) => {
+    setPaymentMethod(method);
+
+    if (method === "cash") {
+      addToast("Cash selected. Collect payment physically.", "info");
+      return;
+    }
+
+    const paymentUrl = paymentGatewayUrls[method];
+    if (!paymentUrl) return;
+
+    const popup = window.open(paymentUrl, "_blank", "noopener,noreferrer");
+    if (!popup) {
+      addToast("Please allow popups to open the payment gateway.", "warning");
+      return;
+    }
+    addToast("Payment gateway opened in a new tab.", "info");
+  };
+
   return (
     <div className="page">
       <div className="container">
@@ -250,16 +355,39 @@ function Bookings() {
                 
                 <div className="d-flex justify-between align-center mt-2">
                   <p className="booking-price">₹{booking.totalPrice}</p>
-                  
-                  {booking.status !== "cancelled" && booking.status !== "completed" && (
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleCancel(booking._id)}
-                      disabled={cancelling === booking._id}
-                    >
-                      {cancelling === booking._id ? "Cancelling..." : "Cancel Booking"}
-                    </button>
-                  )}
+                  <div className="d-flex align-center gap-2">
+                    {booking.status === "completed" && (
+                      <span className={`booking-status ${booking.paymentStatus === "paid" ? "status-confirmed" : "status-pending"}`}>
+                        {booking.paymentStatus === "paid"
+                          ? "Paid"
+                          : booking.paymentStatus === "pending_verification"
+                            ? "Pending Verification"
+                            : "Payment Pending"}
+                      </span>
+                    )}
+
+                    {booking.status === "completed" && booking.paymentStatus !== "paid" && (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => {
+                          setPaymentRide(booking);
+                          setPaymentMethod(booking.paymentMethod || "");
+                        }}
+                      >
+                        Pay Now
+                      </button>
+                    )}
+
+                    {booking.status !== "cancelled" && booking.status !== "completed" && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleCancel(booking._id)}
+                        disabled={cancelling === booking._id}
+                      >
+                        {cancelling === booking._id ? "Cancelling..." : "Cancel Booking"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -272,12 +400,28 @@ function Bookings() {
           </div>
         )}
       </div>
+      {paymentRide && (
+        <BookingPaymentModal
+          booking={paymentRide}
+          selectedMethod={paymentMethod}
+          onMethodChange={handlePaymentMethodChange}
+          onPayNow={handlePayment}
+          onClose={handlePaymentLater}
+          loading={paymentLoading}
+        />
+      )}
       {feedbackRide && (
         <RideFeedback
           booking={feedbackRide}
           loading={feedbackLoading}
           onSubmit={handleFeedbackSubmit}
           onSkip={handleFeedbackSkip}
+        />
+      )}
+      {cashPendingBooking && (
+        <CashPaymentPendingModal
+          booking={cashPendingBooking}
+          onClose={() => setCashPendingBooking(null)}
         />
       )}
     </div>

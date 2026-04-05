@@ -1,7 +1,11 @@
 const express = require("express");
+const http = require("http");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { Server } = require("socket.io");
+const { setIO, emitToAdmins, emitToUser } = require("./utils/socket");
 require("dotenv").config();
 
 const app = express();
@@ -55,6 +59,38 @@ app.use(cors(corsOptions));
 ================================= */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+/* ==============================
+   REALTIME API TRACE
+================================= */
+app.use((req, res, next) => {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const startedAt = Date.now();
+
+  const requestMeta = {
+    requestId,
+    method: req.method,
+    path: req.originalUrl,
+    timestamp: new Date(startedAt).toISOString()
+  };
+
+  emitToAdmins("system:api_request", requestMeta);
+
+  res.on("finish", () => {
+    const responseMeta = {
+      ...requestMeta,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startedAt
+    };
+
+    emitToAdmins("system:api_response", responseMeta);
+    if (req.user?.id) {
+      emitToUser(req.user.id, "system:api_response", responseMeta);
+    }
+  });
+
+  next();
+});
 
 /* ==============================
    STATIC FILES
@@ -277,54 +313,164 @@ app.use((err, req, res, next) => {
 });
 
 /* ==============================
-   GRACEFUL SHUTDOWN
+   PORT DETECTION UTILITY
 ================================= */
-const gracefulShutdown = async (signal) => {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
-  
-  try {
-    await mongoose.connection.close();
-    console.log("MongoDB connection closed");
+const findFreePort = (startPort, host = "0.0.0.0") => {
+  return new Promise((resolve) => {
+    const server = require("net").createServer();
+    let port = startPort;
     
-    server.close(() => {
-      console.log("HTTP server closed");
-      process.exit(0);
-    });
+    const tryPort = () => {
+      server.once("error", (err) => {
+        if (err.code === "EADDRINUSE" && port < startPort + 10) {
+          port++;
+          tryPort();
+        } else {
+          server.close();
+          resolve(port);
+        }
+      });
+      
+      server.once("listening", () => {
+        server.close();
+        resolve(port);
+      });
+      
+      server.listen(port, host);
+    };
     
-  } catch (error) {
-    console.error("Error during shutdown:", error);
-    process.exit(1);
-  }
+    tryPort();
+  });
 };
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-process.on("uncaughtException", (err) => {
-  console.error("Uncaught Exception:", err);
-});
-
-process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled Rejection:", reason);
-});
 
 /* ==============================
    START SERVER
 ================================= */
-const server = app.listen(PORT, "0.0.0.0", () => {
-  console.log(`
+const startServer = async () => {
+  let actualPort = PORT;
+  
+  try {
+    // If PORT env var is set, use it directly
+    if (process.env.PORT) {
+      actualPort = parseInt(process.env.PORT);
+    } else {
+      // Auto-detect free port starting from 5000
+      console.log("🔍 Detecting free port starting from 5000...");
+      actualPort = await findFreePort(5000);
+      console.log(`✅ Using free port: ${actualPort}`);
+    }
+  } catch (error) {
+    console.error(`⚠️ Port detection failed, using default: ${PORT}`);
+    actualPort = PORT;
+  }
+  
+  const httpServer = http.createServer(app);
+  const io = new Server(httpServer, {
+    cors: {
+      origin: true,
+      credentials: true
+    },
+    transports: ["websocket", "polling"]
+  });
+
+  setIO(io);
+
+  io.use((socket, next) => {
+    try {
+      const tokenFromAuth = socket.handshake?.auth?.token;
+      const tokenFromHeader = socket.handshake?.headers?.authorization;
+      const rawToken = tokenFromAuth || tokenFromHeader || "";
+      const token = String(rawToken).startsWith("Bearer ")
+        ? String(rawToken).slice(7)
+        : String(rawToken);
+
+      if (!token) {
+        return next(new Error("Authentication token is required"));
+      }
+
+      if (!JWT_SECRET) {
+        return next(new Error("JWT secret is not configured"));
+      }
+
+      const decoded = jwt.verify(token, JWT_SECRET);
+      socket.user = decoded;
+      return next();
+    } catch (error) {
+      return next(new Error("Unauthorized socket connection"));
+    }
+  });
+
+  io.on("connection", (socket) => {
+    const userId = socket.user?.id ? String(socket.user.id) : null;
+    const role = socket.user?.role || "user";
+
+    if (userId) socket.join(`user:${userId}`);
+    socket.join(`role:${role}`);
+
+    socket.emit("system:connected", {
+      socketId: socket.id,
+      userId,
+      role,
+      connectedAt: new Date().toISOString()
+    });
+  });
+
+  const server = httpServer.listen(actualPort, "0.0.0.0", () => {
+    console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║          GoRent Server Running Successfully                ║
 ╠═══════════════════════════════════════════════════════════╣
-║  PORT: ${PORT}
+║  PORT: ${actualPort} (requested: ${PORT})
 ║  NODE_ENV: ${NODE_ENV}
 ║  MongoDB: ${isConnected ? "Connected" : "Connecting..."}
-║  API: http://localhost:${PORT}/api
+║  API: http://localhost:${actualPort}/api
 ╚═══════════════════════════════════════════════════════════╝
-  `);
+    `);
+    
+    // Start MongoDB connection in background
+    connectDB();
+  });
   
-  // Start MongoDB connection in background
-  connectDB();
+  // Update graceful shutdown to use actual server instance
+  const gracefulShutdown = async (signal) => {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
+    
+    try {
+      await mongoose.connection.close();
+      console.log("MongoDB connection closed");
+      
+      server.close(() => {
+        console.log("HTTP server closed");
+        process.exit(0);
+      });
+    } catch (error) {
+      console.error("Error during shutdown:", error);
+      process.exit(1);
+    }
+  };
+  
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  
+  return server;
+};
+
+// Gracefully handle uncaught exceptions before server starts
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+  process.exit(1);
+});
+
+// Start the server
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
 
 module.exports = app;

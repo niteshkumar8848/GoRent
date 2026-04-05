@@ -89,6 +89,7 @@ function Login() {
         email: userData?.email,
         role: userData?.role
       }));
+      window.dispatchEvent(new Event("auth-changed"));
 
       addToast("Login successful!", "success");
       navigate("/");

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useToast } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
 import VehicleDetailsCard from "../components/VehicleDetailsCard";
 import AdminLocationPickerMap from "../components/AdminLocationPickerMap";
+import { connectSocket } from "../utils/socket";
 
 const getApiUrl = () => {
   const envUrl = process.env.REACT_APP_API_URL;
@@ -248,6 +249,34 @@ function AdminDashboard() {
     }
   };
 
+  useEffect(() => {
+    const socket = connectSocket(localStorage.getItem("token"));
+    if (!socket) return undefined;
+
+    const refreshAdminData = () => {
+      fetchBookings(false);
+      fetchUsers(false);
+      fetchFeedbackSummary(false);
+    };
+
+    const events = [
+      "booking:created",
+      "booking:status_updated",
+      "booking:cancelled",
+      "booking:payment_submitted",
+      "booking:payment_verified",
+      "booking:deleted",
+      "system:api_request",
+      "system:api_response"
+    ];
+
+    events.forEach((eventName) => socket.on(eventName, refreshAdminData));
+
+    return () => {
+      events.forEach((eventName) => socket.off(eventName, refreshAdminData));
+    };
+  }, []);
+
   // Booking handlers
   const updateBookingStatus = async (bookingId, status) => {
     // Optimistically update the UI first
@@ -268,7 +297,25 @@ function AdminDashboard() {
     } catch (err) {
       // Revert on error
       setBookings(originalBookings);
-      addToast(err.response?.data?.message || "Failed to update booking", "error");
+      if (err.code === "ECONNABORTED") {
+        addToast("Request timed out while updating booking. Please retry.", "error");
+      } else {
+        addToast(err.response?.data?.message || "Failed to update booking", "error");
+      }
+    }
+  };
+
+  const verifyBookingPayment = async (bookingId) => {
+    try {
+      const res = await axios.put(
+        `${API_URL}/bookings/${bookingId}/payment/verify`,
+        {},
+        config
+      );
+      addToast(res.data?.message || "Payment verified successfully", "success");
+      fetchBookings(false);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to verify payment", "error");
     }
   };
 
@@ -587,6 +634,110 @@ function AdminDashboard() {
     });
   };
 
+  const formatPaymentMethod = (method) => {
+    const methodMap = {
+      esewa: "eSewa",
+      khalti: "Khalti",
+      mobile_banking: "Mobile Banking",
+      cash: "Cash"
+    };
+    return methodMap[method] || "N/A";
+  };
+
+  const analytics = useMemo(() => {
+    const bookingStatusCounts = {
+      pending: 0,
+      confirmed: 0,
+      completed: 0,
+      cancelled: 0
+    };
+    bookings.forEach((booking) => {
+      const status = booking.status || "pending";
+      if (bookingStatusCounts[status] !== undefined) {
+        bookingStatusCounts[status] += 1;
+      }
+    });
+
+    const paymentMethodCounts = {
+      esewa: 0,
+      khalti: 0,
+      mobile_banking: 0,
+      cash: 0
+    };
+    bookings.forEach((booking) => {
+      const method = booking.paymentMethod || "";
+      if (paymentMethodCounts[method] !== undefined) {
+        paymentMethodCounts[method] += 1;
+      }
+    });
+
+    const totalRevenue = bookings
+      .filter((booking) => booking.status === "completed")
+      .reduce((sum, booking) => sum + Number(booking.totalPrice || 0), 0);
+
+    const paidRevenue = bookings
+      .filter((booking) => booking.paymentStatus === "paid")
+      .reduce((sum, booking) => sum + Number(booking.totalPrice || 0), 0);
+
+    const monthlyRevenueMap = new Map();
+    for (let i = 5; i >= 0; i -= 1) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      monthlyRevenueMap.set(key, {
+        label: date.toLocaleDateString("en-US", { month: "short" }),
+        revenue: 0
+      });
+    }
+
+    bookings.forEach((booking) => {
+      if (booking.status !== "completed") return;
+      const sourceDate = booking.createdAt || booking.endDate || booking.startDate;
+      const date = sourceDate ? new Date(sourceDate) : null;
+      if (!date || Number.isNaN(date.getTime())) return;
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      if (monthlyRevenueMap.has(key)) {
+        const current = monthlyRevenueMap.get(key);
+        current.revenue += Number(booking.totalPrice || 0);
+        monthlyRevenueMap.set(key, current);
+      }
+    });
+
+    const vehicleCategoryCounts = {};
+    vehicles.forEach((vehicle) => {
+      const category = vehicle.category || "Unspecified";
+      vehicleCategoryCounts[category] = (vehicleCategoryCounts[category] || 0) + 1;
+    });
+
+    const topRatedVehicles = Object.entries(feedbackSummary)
+      .map(([vehicleId, summary]) => {
+        const vehicle = vehicles.find((item) => String(item._id) === String(vehicleId));
+        return {
+          name: vehicle?.name || "Unknown Vehicle",
+          averageRating: Number(summary?.average_rating || 0),
+          reviews: Number(summary?.review_count || 0)
+        };
+      })
+      .sort((a, b) => b.averageRating - a.averageRating)
+      .slice(0, 5);
+
+    return {
+      bookingStatusCounts,
+      paymentMethodCounts,
+      totalRevenue,
+      paidRevenue,
+      completedBookings: bookingStatusCounts.completed,
+      totalBookings: bookings.length,
+      activeUsers: users.filter((user) => !user.isBlacklisted).length,
+      blacklistedUsers: users.filter((user) => user.isBlacklisted).length,
+      availableVehicles: vehicles.filter((vehicle) => vehicle.available).length,
+      unavailableVehicles: vehicles.filter((vehicle) => !vehicle.available).length,
+      monthlyRevenue: Array.from(monthlyRevenueMap.values()),
+      vehicleCategoryCounts,
+      topRatedVehicles
+    };
+  }, [bookings, users, vehicles, feedbackSummary]);
+
   if (loading) {
     return (
       <div className="page">
@@ -630,6 +781,12 @@ function AdminDashboard() {
             Users ({users.length})
           </button>
           <button
+            className={`admin-tab ${activeTab === "analytics" ? "active" : ""}`}
+            onClick={() => setActiveTab("analytics")}
+          >
+            Analytics
+          </button>
+          <button
             className={`admin-tab ${activeTab === "settings" ? "active" : ""}`}
             onClick={() => setActiveTab("settings")}
           >
@@ -649,6 +806,7 @@ function AdminDashboard() {
                     <th>Contact</th>
                     <th>Dates</th>
                     <th>Total</th>
+                    <th>Payment</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -678,36 +836,57 @@ function AdminDashboard() {
                       </td>
                       <td>₹{booking.totalPrice}</td>
                       <td>
+                        <span className={`booking-status ${booking.paymentStatus === "paid" ? "status-confirmed" : "status-pending"}`}>
+                          {booking.paymentStatus === "paid"
+                            ? "Paid"
+                            : booking.paymentStatus === "pending_verification"
+                              ? "Pending Verification"
+                              : "Pending"}
+                        </span>
+                        <br />
+                        <small>{formatPaymentMethod(booking.paymentMethod)}</small>
+                      </td>
+                      <td>
                         <span className={`booking-status ${getStatusClass(booking.status)}`}>
                           {booking.status}
                         </span>
                       </td>
                       <td>
-                        {booking.status === "pending" && (
-                          <>
+                        <div className="admin-booking-actions">
+                          {booking.status === "pending" && (
+                            <>
+                              <button
+                                className="btn btn-success btn-sm"
+                                onClick={() => updateBookingStatus(booking._id, "confirmed")}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => updateBookingStatus(booking._id, "cancelled")}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {booking.status === "confirmed" && (
                             <button
-                              className="btn btn-success btn-sm"
-                              onClick={() => updateBookingStatus(booking._id, "confirmed")}
-                              style={{ marginRight: "0.5rem" }}
+                              className="btn btn-primary btn-sm"
+                              onClick={() => updateBookingStatus(booking._id, "completed")}
                             >
-                              Confirm
+                              Complete
                             </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => updateBookingStatus(booking._id, "cancelled")}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                        {booking.status === "confirmed" && (
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => updateBookingStatus(booking._id, "completed")}
-                          >
-                            Complete
-                          </button>
-                        )}
+                          )}
+                          {booking.status === "completed"
+                            && booking.paymentStatus !== "paid" && (
+                              <button
+                                className="btn btn-success btn-sm"
+                                onClick={() => verifyBookingPayment(booking._id)}
+                              >
+                                Verify Payment
+                              </button>
+                            )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -867,6 +1046,158 @@ function AdminDashboard() {
                 <h3 className="empty-state-title">No users found</h3>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === "analytics" && (
+          <div className="analytics-layout">
+            <div className="analytics-kpi-grid">
+              <div className="analytics-kpi-card">
+                <p>Total Bookings</p>
+                <h3>{analytics.totalBookings}</h3>
+              </div>
+              <div className="analytics-kpi-card">
+                <p>Completed Bookings</p>
+                <h3>{analytics.completedBookings}</h3>
+              </div>
+              <div className="analytics-kpi-card">
+                <p>Total Revenue</p>
+                <h3>₹{analytics.totalRevenue}</h3>
+              </div>
+              <div className="analytics-kpi-card">
+                <p>Paid Revenue</p>
+                <h3>₹{analytics.paidRevenue}</h3>
+              </div>
+              <div className="analytics-kpi-card">
+                <p>Available Vehicles</p>
+                <h3>{analytics.availableVehicles}</h3>
+              </div>
+              <div className="analytics-kpi-card">
+                <p>Active Users</p>
+                <h3>{analytics.activeUsers}</h3>
+              </div>
+            </div>
+
+            <div className="analytics-grid">
+              <div className="analytics-card">
+                <h3>Bookings by Status</h3>
+                <div className="analytics-bars">
+                  {Object.entries(analytics.bookingStatusCounts).map(([status, count]) => {
+                    const maxCount = Math.max(...Object.values(analytics.bookingStatusCounts), 1);
+                    const widthPercent = (count / maxCount) * 100;
+                    return (
+                      <div key={`status-${status}`} className="analytics-bar-row">
+                        <span className="analytics-label">{status}</span>
+                        <div className="analytics-bar-track">
+                          <div className="analytics-bar-fill" style={{ width: `${widthPercent}%` }} />
+                        </div>
+                        <span className="analytics-value">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="analytics-card">
+                <h3>Payment Method Share</h3>
+                <div className="analytics-donut-wrap">
+                  <svg viewBox="0 0 42 42" className="analytics-donut">
+                    {(() => {
+                      const entries = Object.entries(analytics.paymentMethodCounts);
+                      const total = Math.max(entries.reduce((sum, [, value]) => sum + value, 0), 1);
+                      let cumulative = 0;
+                      const colors = ["#6366f1", "#ec4899", "#06b6d4", "#10b981"];
+                      return entries.map(([method, count], index) => {
+                        const slice = (count / total) * 100;
+                        const strokeDasharray = `${slice} ${100 - slice}`;
+                        const strokeDashoffset = 25 - cumulative;
+                        cumulative += slice;
+                        return (
+                          <circle
+                            key={`method-${method}`}
+                            cx="21"
+                            cy="21"
+                            r="15.915"
+                            fill="transparent"
+                            stroke={colors[index % colors.length]}
+                            strokeWidth="5"
+                            strokeDasharray={strokeDasharray}
+                            strokeDashoffset={strokeDashoffset}
+                          />
+                        );
+                      });
+                    })()}
+                  </svg>
+                  <div className="analytics-legend">
+                    {Object.entries(analytics.paymentMethodCounts).map(([method, count]) => (
+                      <div key={`legend-${method}`} className="analytics-legend-item">
+                        <span className="analytics-legend-label">{formatPaymentMethod(method)}</span>
+                        <span className="analytics-legend-value">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="analytics-card">
+                <h3>Revenue Trend (Last 6 Months)</h3>
+                <div className="analytics-line-chart">
+                  {analytics.monthlyRevenue.map((item) => {
+                    const maxRevenue = Math.max(...analytics.monthlyRevenue.map((entry) => entry.revenue), 1);
+                    const heightPercent = (item.revenue / maxRevenue) * 100;
+                    return (
+                      <div key={`month-${item.label}`} className="analytics-line-col">
+                        <div className="analytics-line-track">
+                          <div className="analytics-line-fill" style={{ height: `${heightPercent}%` }} />
+                        </div>
+                        <span className="analytics-value">₹{item.revenue}</span>
+                        <span className="analytics-label">{item.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="analytics-card">
+                <h3>Vehicles by Category</h3>
+                {Object.keys(analytics.vehicleCategoryCounts).length > 0 ? (
+                  <div className="analytics-bars">
+                    {Object.entries(analytics.vehicleCategoryCounts).map(([category, count]) => {
+                      const maxCount = Math.max(...Object.values(analytics.vehicleCategoryCounts), 1);
+                      const widthPercent = (count / maxCount) * 100;
+                      return (
+                        <div key={`category-${category}`} className="analytics-bar-row">
+                          <span className="analytics-label">{category}</span>
+                          <div className="analytics-bar-track">
+                            <div className="analytics-bar-fill analytics-bar-secondary" style={{ width: `${widthPercent}%` }} />
+                          </div>
+                          <span className="analytics-value">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-muted">No vehicle data available.</p>
+                )}
+              </div>
+
+              <div className="analytics-card">
+                <h3>Top Rated Vehicles</h3>
+                {analytics.topRatedVehicles.length > 0 ? (
+                  <div className="analytics-list">
+                    {analytics.topRatedVehicles.map((vehicle, index) => (
+                      <div key={`top-rated-${vehicle.name}-${index}`} className="analytics-list-item">
+                        <span className="analytics-label">{vehicle.name}</span>
+                        <span className="analytics-value">{vehicle.averageRating} ★ ({vehicle.reviews})</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted">No rating data yet.</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

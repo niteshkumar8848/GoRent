@@ -66,7 +66,7 @@ function PickupLocationSelector({ value, onChange }) {
     if (value?.lat && value?.lng) {
       return [value.lat, value.lng];
     }
-    return [28.6139, 77.209];
+    return [27.7172, 85.324];
   }, [value]);
 
   useEffect(() => {

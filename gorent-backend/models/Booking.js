@@ -48,6 +48,20 @@ const bookingSchema = new mongoose.Schema({
     enum: ["pending", "confirmed", "completed", "cancelled"],
     default: "pending"
   },
+  paymentStatus: {
+    type: String,
+    enum: ["pending", "pending_verification", "paid"],
+    default: "pending"
+  },
+  paymentMethod: {
+    type: String,
+    enum: ["", "esewa", "khalti", "mobile_banking", "cash"],
+    default: ""
+  },
+  paidAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -80,6 +80,7 @@ function Register() {
           email: responseData.email,
           role: responseData.role
         }));
+        window.dispatchEvent(new Event("auth-changed"));
 
         addToast("Registration successful!", "success");
         navigate("/dashboard");
@@ -190,4 +191,3 @@ function Register() {
 }
 
 export default Register;
-

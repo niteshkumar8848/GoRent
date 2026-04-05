@@ -1,15 +1,15 @@
 # GoRent
 
-GoRent is a full-stack vehicle rental platform built with React, Node.js/Express, and MongoDB. It supports customer bookings, admin operations, pickup location mapping, post-ride feedback, and role-based access control with JWT authentication.
+GoRent is a full-stack vehicle rental platform built with React, Node.js/Express, and MongoDB. It supports customer bookings, map-based pickup selection, payment workflows (including admin verification), post-ride feedback, realtime admin/user updates, and role-based access with JWT.
 
 ## Overview
 
 GoRent provides:
-- Customer authentication, vehicle browsing, and booking flows
-- Admin dashboard for vehicle, booking, and user governance
-- Map-based pickup location management (Leaflet + OpenStreetMap)
-- Booking feedback collection and analytics
-- Modern responsive UI with theme support
+- Customer authentication, vehicle browsing, booking, and payment flows
+- Admin dashboard for booking/vehicle/user/payment management
+- Location-aware UX (nearby vehicle finder + map-based pickup)
+- Realtime updates between user and admin via Socket.IO
+- Analytics dashboard with KPI cards and graph-style visualizations
 
 ## Tech Stack
 
@@ -19,6 +19,7 @@ GoRent provides:
 - Axios
 - React DatePicker
 - Leaflet + React Leaflet
+- Socket.IO Client
 - CSS (custom design tokens and utility classes)
 
 ### Backend
@@ -28,6 +29,7 @@ GoRent provides:
 - JWT authentication
 - bcryptjs
 - multer (vehicle media uploads)
+- Socket.IO
 
 ## Monorepo Structure
 
@@ -58,23 +60,35 @@ GoRent/
 
 ### Customer
 - Register/login with JWT
-- Browse vehicles with detail cards
-- Choose pickup location via text search or map pin drop
-- Book vehicles by date range
-- Submit post-completion feedback (one-time per completed booking)
+- Browse and filter vehicles
+- Find top nearby vehicles from current location (Home screen)
+- Open vehicle details + map modal and book directly
+- Pickup location auto-filled from current location (editable)
+- Payment flow after ride completion:
+  - eSewa / Khalti / Mobile Banking
+  - Cash (submitted by user, verified by admin)
+- Post-completion feedback (after payment confirmation)
 
 ### Admin
 - Manage vehicles (create/update/delete/availability)
-- Set pickup locations with manual inputs or map picker
-- Manage booking statuses
-- View feedback summaries per vehicle
+- Set pickup locations via manual input or map picker
+- Manage booking statuses (confirm/complete/cancel)
+- Verify pending payments from bookings table
+- View payment method + status per booking
 - Blacklist/unblock users
+- Analytics tab with:
+  - bookings/revenue KPIs
+  - booking status distribution
+  - payment method share
+  - revenue trend (last 6 months)
+  - vehicles by category
+  - top-rated vehicles
 
 ### System
 - Route protection for authenticated/admin areas
 - Nominatim proxy endpoints for geocoding/reverse geocoding
-- Footer + legal/informational pages
-- Responsive UI
+- Realtime socket events for booking/payment lifecycle
+- Toasts, confirm dialogs, responsive UI, theme support
 
 ## Prerequisites
 
@@ -167,6 +181,8 @@ Base URL: `http://localhost:5000/api`
 - `GET /bookings/all` (admin)
 - `PUT /bookings/:id/status` (admin)
 - `PUT /bookings/:id/cancel`
+- `PUT /bookings/:id/payment`
+- `PUT /bookings/:id/payment/verify` (admin)
 - `DELETE /bookings/:id` (admin)
 
 ### Feedback
@@ -181,6 +197,18 @@ Base URL: `http://localhost:5000/api`
 ### Health
 - `GET /health`
 
+## Realtime Events (Socket.IO)
+
+Examples of emitted events:
+- `booking:created`
+- `booking:status_updated`
+- `booking:cancelled`
+- `booking:payment_submitted`
+- `booking:payment_verified`
+- `booking:deleted`
+- `system:api_request` (admin monitoring)
+- `system:api_response` (admin + requesting user)
+
 ## Default Admin Account
 
 On first successful backend startup, default admin is created:
@@ -193,7 +221,7 @@ On first successful backend startup, default admin is created:
 - JWT is required for protected endpoints.
 - Admin-only routes validate role from token payload.
 - Blacklisted users are blocked from creating bookings.
-- Sensitive values must be provided via `.env` files.
+- Sensitive values should be provided via `.env` files.
 
 ## Troubleshooting
 
@@ -203,6 +231,13 @@ On first successful backend startup, default admin is created:
 
 ### CORS errors
 - Add frontend origin to `ALLOWED_ORIGINS`.
+
+### Payment verify not visible in admin
+- Booking must be completed and unpaid.
+
+### Realtime not updating
+- Ensure both backend and frontend are restarted after dependency changes.
+- Check that token exists in localStorage (socket auth depends on JWT).
 
 ### Build warnings
 - Current frontend has non-blocking lint warnings; app still builds and runs.

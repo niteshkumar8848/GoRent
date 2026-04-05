@@ -5,6 +5,7 @@ const User = require("../models/User");
 const auth = require("../middleware/authMiddleware");
 const admin = require("../middleware/adminMiddleware");
 const mongoose = require("mongoose");
+const { emitToAdmins, emitToUser } = require("../utils/socket");
 
 const getPublicImageUrl = (req, imagePath) => {
   if (!imagePath) return "";
@@ -63,6 +64,9 @@ const normalizeBookingForResponse = (req, booking) => {
     return {
       ...booking,
       pickupLocation: normalizedPickupLocation,
+      paymentStatus: booking.paymentStatus || "pending",
+      paymentMethod: booking.paymentMethod || "",
+      paidAt: booking.paidAt || null,
       feedbackSubmitted: Boolean(booking.feedbackSubmitted || booking.feedback_submitted),
       feedback_submitted: Boolean(booking.feedback_submitted || booking.feedbackSubmitted)
     };
@@ -71,6 +75,9 @@ const normalizeBookingForResponse = (req, booking) => {
   return {
     ...booking,
     pickupLocation: normalizedPickupLocation,
+    paymentStatus: booking.paymentStatus || "pending",
+    paymentMethod: booking.paymentMethod || "",
+    paidAt: booking.paidAt || null,
     feedbackSubmitted: Boolean(booking.feedbackSubmitted || booking.feedback_submitted),
     feedback_submitted: Boolean(booking.feedback_submitted || booking.feedbackSubmitted),
     vehicle: {
@@ -81,6 +88,39 @@ const normalizeBookingForResponse = (req, booking) => {
       image: getVehicleImageUrl(req, booking.vehicle)
     }
   };
+};
+
+const PAYMENT_METHODS = ["esewa", "khalti", "mobile_banking", "cash"];
+const PAYMENT_STATUSES = ["pending", "pending_verification", "paid"];
+
+const normalizeLegacyPaymentFields = (booking) => {
+  if (!booking) return;
+
+  if (!PAYMENT_STATUSES.includes(booking.paymentStatus)) {
+    booking.paymentStatus = "pending";
+  }
+
+  if (booking.paymentMethod && !PAYMENT_METHODS.includes(booking.paymentMethod)) {
+    booking.paymentMethod = "";
+  }
+
+  if (booking.paymentStatus !== "paid") {
+    booking.paidAt = null;
+  }
+};
+
+const emitBookingEvent = (eventName, booking) => {
+  if (!booking) return;
+  const payload = {
+    bookingId: String(booking._id),
+    userId: String(booking.user),
+    status: booking.status,
+    paymentStatus: booking.paymentStatus || "pending",
+    paymentMethod: booking.paymentMethod || "",
+    timestamp: new Date().toISOString()
+  };
+  emitToAdmins(eventName, payload);
+  emitToUser(booking.user, eventName, payload);
 };
 
 // Middleware to check if MongoDB is connected
@@ -195,6 +235,7 @@ router.post("/", checkDB, auth, async (req, res) => {
     });
 
     const savedBooking = await booking.save();
+    emitBookingEvent("booking:created", savedBooking);
     
     // Populate details
     await savedBooking.populate("vehicle");
@@ -300,8 +341,10 @@ router.put("/:id/status", checkDB, auth, admin, async (req, res) => {
       });
     }
 
+    normalizeLegacyPaymentFields(booking);
     booking.status = status;
     await booking.save();
+    emitBookingEvent("booking:status_updated", booking);
     
     await booking.populate("vehicle");
     await booking.populate("user", "name email");
@@ -356,8 +399,10 @@ router.put("/:id/cancel", checkDB, auth, async (req, res) => {
       });
     }
 
+    normalizeLegacyPaymentFields(booking);
     booking.status = "cancelled";
     await booking.save();
+    emitBookingEvent("booking:cancelled", booking);
     
     await booking.populate("vehicle");
     await booking.populate("user", "name email");
@@ -373,6 +418,156 @@ router.put("/:id/cancel", checkDB, auth, async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: "Server error while cancelling booking" 
+    });
+  }
+});
+
+// Pay for completed booking (User only)
+router.put("/:id/payment", checkDB, auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { method } = req.body;
+
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format"
+      });
+    }
+
+    if (!PAYMENT_METHODS.includes(method)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment method"
+      });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    if (String(booking.user) !== String(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to pay for this booking"
+      });
+    }
+
+    if (booking.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Payment is allowed only for completed bookings"
+      });
+    }
+
+    if (booking.paymentStatus === "paid") {
+      await booking.populate("vehicle");
+      await booking.populate("user", "name email");
+      return res.json({
+        success: true,
+        message: "Booking is already paid",
+        data: normalizeBookingForResponse(req, booking.toObject())
+      });
+    }
+
+    booking.paymentMethod = method;
+    if (method === "cash") {
+      booking.paymentStatus = "pending_verification";
+      booking.paidAt = null;
+    } else {
+      booking.paymentStatus = "paid";
+      booking.paidAt = new Date();
+    }
+    await booking.save();
+    emitBookingEvent("booking:payment_submitted", booking);
+
+    await booking.populate("vehicle");
+    await booking.populate("user", "name email");
+    return res.json({
+      success: true,
+      message: method === "cash"
+        ? "Cash payment submitted and pending admin verification"
+        : "Payment completed successfully",
+      data: normalizeBookingForResponse(req, booking.toObject())
+    });
+  } catch (err) {
+    console.error("Booking payment error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while processing payment"
+    });
+  }
+});
+
+// Verify cash payment (Admin only)
+router.put("/:id/payment/verify", checkDB, auth, admin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format"
+      });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    if (booking.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Only completed bookings can be verified for payment"
+      });
+    }
+
+    if (booking.paymentStatus === "paid") {
+      await booking.populate("vehicle");
+      await booking.populate("user", "name email");
+      return res.json({
+        success: true,
+        message: "Payment is already verified",
+        data: normalizeBookingForResponse(req, booking.toObject())
+      });
+    }
+
+    const isVerificationCandidate = ["pending", "pending_verification"].includes(booking.paymentStatus);
+    if (!isVerificationCandidate) {
+      return res.status(400).json({
+        success: false,
+        message: "This booking is not awaiting payment verification"
+      });
+    }
+
+    if (!booking.paymentMethod) {
+      booking.paymentMethod = "cash";
+    }
+    booking.paymentStatus = "paid";
+    booking.paidAt = new Date();
+    await booking.save();
+    emitBookingEvent("booking:payment_verified", booking);
+
+    await booking.populate("vehicle");
+    await booking.populate("user", "name email");
+    return res.json({
+      success: true,
+      message: "Payment verified successfully",
+      data: normalizeBookingForResponse(req, booking.toObject())
+    });
+  } catch (err) {
+    console.error("Verify booking payment error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while verifying payment"
     });
   }
 });
@@ -399,6 +594,15 @@ router.delete("/:id", checkDB, auth, admin, async (req, res) => {
     }
 
     await booking.deleteOne();
+    emitToAdmins("booking:deleted", {
+      bookingId: String(booking._id),
+      userId: String(booking.user),
+      timestamp: new Date().toISOString()
+    });
+    emitToUser(booking.user, "booking:deleted", {
+      bookingId: String(booking._id),
+      timestamp: new Date().toISOString()
+    });
     res.json({ 
       success: true,
       message: "Booking deleted successfully" 
