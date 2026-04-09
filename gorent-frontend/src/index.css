@@ -2060,6 +2060,100 @@ input[type="file"]:focus {
   color: var(--primary-dark);
 }
 
+.payment-success-modal {
+  max-width: 620px;
+}
+
+.payment-success-banner {
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.payment-success-provider {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.payment-success-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.payment-success-pill {
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.payment-success-esewa {
+  background: linear-gradient(135deg, #ecfdf3, #d1fae5);
+  border-color: #86efac;
+  color: #166534;
+}
+
+.payment-success-esewa .payment-success-pill {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.payment-success-khalti {
+  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+  border-color: #c4b5fd;
+  color: #5b21b6;
+}
+
+.payment-success-khalti .payment-success-pill {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.payment-success-mobile-banking {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.payment-success-mobile-banking .payment-success-pill {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.payment-success-card {
+  margin-bottom: 0;
+}
+
+.payment-success-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--light-tertiary);
+  padding: 0.6rem 0;
+  gap: 1rem;
+}
+
+.payment-success-row:last-child {
+  border-bottom: none;
+}
+
+.payment-success-row span {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.payment-success-row strong {
+  color: var(--dark-secondary);
+  font-size: 0.9rem;
+}
+
 /* Footer */
 .site-footer {
   margin-top: auto;

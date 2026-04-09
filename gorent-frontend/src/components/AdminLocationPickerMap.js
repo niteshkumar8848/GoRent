@@ -45,7 +45,7 @@ DraggableMapMarker.propTypes = {
 function AdminLocationPickerMap({ initialPosition, onConfirm, onCancel }) {
   const [selectedPosition, setSelectedPosition] = useState(initialPosition);
 
-  const center = useMemo(() => selectedPosition || [28.6139, 77.209], [selectedPosition]);
+  const center = useMemo(() => selectedPosition || [27.7172, 85.3240], [selectedPosition]);
 
   return (
     <div className="admin-location-picker">
@@ -84,7 +84,7 @@ AdminLocationPickerMap.propTypes = {
 };
 
 AdminLocationPickerMap.defaultProps = {
-  initialPosition: [28.6139, 77.209]
+  initialPosition: [27.7172, 85.3240]
 };
 
 export default AdminLocationPickerMap;

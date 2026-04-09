@@ -5,6 +5,7 @@ import { useConfirmDialog } from "../components/ConfirmDialog";
 import RideFeedback from "../components/RideFeedback";
 import BookingPaymentModal from "../components/BookingPaymentModal";
 import CashPaymentPendingModal from "../components/CashPaymentPendingModal";
+import PaymentSuccessModal from "../components/PaymentSuccessModal";
 import { connectSocket } from "../utils/socket";
 
 // Get API URL from environment or use default
@@ -57,12 +58,14 @@ function Bookings() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [dismissedRideIds, setDismissedRideIds] = useState([]);
   const [cashPendingBooking, setCashPendingBooking] = useState(null);
+  const [paymentSuccessBooking, setPaymentSuccessBooking] = useState(null);
+  const [paymentSuccessMethod, setPaymentSuccessMethod] = useState("");
   const { addToast } = useToast();
   const { confirm } = useConfirmDialog();
   const paymentGatewayUrls = {
     esewa: "https://esewa.com.np/#/home",
     khalti: "https://khalti.com/",
-    mobile_banking: "https://ebanking.nabilbank.com/"
+    mobile_banking: "https://www.nabilbank.com/"
   };
 
   useEffect(() => {
@@ -262,8 +265,14 @@ function Bookings() {
         }
       );
       addToast(response.data?.message || "Payment completed successfully", "success");
+      setDismissedPaymentRideIds((prev) => (
+        prev.includes(paymentRide._id) ? prev : [...prev, paymentRide._id]
+      ));
       if (paymentMethod === "cash") {
         setCashPendingBooking(response.data?.data || paymentRide);
+      } else {
+        setPaymentSuccessMethod(paymentMethod);
+        setPaymentSuccessBooking(response.data?.data || paymentRide);
       }
       setPaymentRide(null);
       fetchBookings(false);
@@ -422,6 +431,16 @@ function Bookings() {
         <CashPaymentPendingModal
           booking={cashPendingBooking}
           onClose={() => setCashPendingBooking(null)}
+        />
+      )}
+      {paymentSuccessBooking && (
+        <PaymentSuccessModal
+          booking={paymentSuccessBooking}
+          method={paymentSuccessMethod}
+          onClose={() => {
+            setPaymentSuccessBooking(null);
+            setPaymentSuccessMethod("");
+          }}
         />
       )}
     </div>

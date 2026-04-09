@@ -1548,8 +1548,8 @@ function AdminDashboard() {
               <div className="modal-body">
                 <AdminLocationPickerMap
                   initialPosition={[
-                    Number(vehicleForm.pickup_locations[mapPickerIndex]?.lat) || 28.6139,
-                    Number(vehicleForm.pickup_locations[mapPickerIndex]?.lng) || 77.209
+                    Number(vehicleForm.pickup_locations[mapPickerIndex]?.lat) || 27.7172,
+                    Number(vehicleForm.pickup_locations[mapPickerIndex]?.lng) || 85.3240
                   ]}
                   onConfirm={applyMapSelection}
                   onCancel={closeLocationPicker}
