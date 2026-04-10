@@ -62,11 +62,6 @@ function Bookings() {
   const [paymentSuccessMethod, setPaymentSuccessMethod] = useState("");
   const { addToast } = useToast();
   const { confirm } = useConfirmDialog();
-  const paymentGatewayUrls = {
-    esewa: "https://esewa.com.np/#/home",
-    khalti: "https://khalti.com/",
-    mobile_banking: "https://www.nabilbank.com/"
-  };
 
   useEffect(() => {
     fetchBookings(true);
@@ -294,18 +289,9 @@ function Bookings() {
 
     if (method === "cash") {
       addToast("Cash selected. Collect payment physically.", "info");
-      return;
+    } else if (method) {
+      addToast(`${method.replace("_", " ")} selected. Complete and confirm payment here.`, "info");
     }
-
-    const paymentUrl = paymentGatewayUrls[method];
-    if (!paymentUrl) return;
-
-    const popup = window.open(paymentUrl, "_blank", "noopener,noreferrer");
-    if (!popup) {
-      addToast("Please allow popups to open the payment gateway.", "warning");
-      return;
-    }
-    addToast("Payment gateway opened in a new tab.", "info");
   };
 
   return (

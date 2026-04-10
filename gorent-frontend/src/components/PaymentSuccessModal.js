@@ -4,17 +4,22 @@ const PAYMENT_UI = {
   esewa: {
     provider: "eSewa",
     className: "payment-success-esewa",
-    helpText: "Paid from your eSewa wallet"
+    logoSrc: "/logos/esewa-icon.png",
+    logo: "eS",
+    helpText: "Wallet transfer received successfully"
   },
   khalti: {
     provider: "Khalti",
     className: "payment-success-khalti",
-    helpText: "Paid using your Khalti account"
+    logoSrc: "/logos/khalti-icon.png",
+    logo: "K",
+    helpText: "Payment settled through Khalti"
   },
   mobile_banking: {
     provider: "Mobile Banking",
     className: "payment-success-mobile-banking",
-    helpText: "Paid from your mobile banking app"
+    logo: "MB",
+    helpText: "Bank transfer completed from mobile app"
   }
 };
 
@@ -26,19 +31,31 @@ function PaymentSuccessModal({ booking, method, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal payment-modal payment-success-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="modal payment-modal payment-success-modal payment-success-auth" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">{methodUi.provider} Payment Successful</h2>
+          <h2 className="modal-title">Payment Received Successfully</h2>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 
         <div className="modal-body">
           <div className={`payment-success-banner ${methodUi.className}`}>
-            <div>
-              <p className="payment-success-provider">{methodUi.provider}</p>
-              <p className="payment-success-subtitle">{methodUi.helpText}</p>
+            <div className="payment-success-brand">
+              <span className="payment-success-logo">
+                {methodUi.logoSrc ? (
+                  <img src={methodUi.logoSrc} alt={`${methodUi.provider} logo`} className="payment-success-logo-img" />
+                ) : (
+                  methodUi.logo
+                )}
+              </span>
+              <div>
+                <p className="payment-success-provider">{methodUi.provider}</p>
+                <p className="payment-success-subtitle">{methodUi.helpText}</p>
+              </div>
             </div>
-            <span className="payment-success-pill">SUCCESS</span>
+            <div className="payment-success-state">
+              <span className="payment-success-check">✓</span>
+              <p className="payment-success-subtitle">Status: Successful</p>
+            </div>
           </div>
 
           <div className="booking-card payment-success-card">
@@ -59,11 +76,15 @@ function PaymentSuccessModal({ booking, method, onClose }) {
               <strong>{new Date().toLocaleString()}</strong>
             </div>
           </div>
+
+          <p className="payment-success-note">
+            Keep this reference for support and verification.
+          </p>
         </div>
 
         <div className="modal-footer">
           <button type="button" className="btn btn-primary" onClick={onClose}>
-            OK
+            Done
           </button>
         </div>
       </div>

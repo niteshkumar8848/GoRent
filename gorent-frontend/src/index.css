@@ -2039,29 +2039,224 @@ input[type="file"]:focus {
   gap: 0.75rem;
 }
 
-.payment-method-chip {
+.payment-method-card {
   border: 1px solid var(--light-tertiary);
   background: var(--card-bg);
-  color: var(--dark-secondary);
   border-radius: var(--radius);
-  padding: 0.75rem 0.9rem;
-  font-weight: 600;
+  padding: 0.9rem;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
   transition: all var(--transition);
 }
 
-.payment-method-chip:hover {
-  border-color: var(--primary-light);
+.payment-method-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
-.payment-method-chip.active {
-  border-color: var(--primary-color);
-  background: rgba(99, 102, 241, 0.12);
-  color: var(--primary-dark);
+.payment-method-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.payment-method-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.payment-method-card strong {
+  color: var(--dark-secondary);
+  display: block;
+  margin-bottom: 0.1rem;
+}
+
+.payment-method-card small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.75rem;
+}
+
+.payment-brand-esewa {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: linear-gradient(135deg, rgba(240, 253, 244, 0.9), rgba(220, 252, 231, 0.9));
+}
+
+.payment-brand-esewa .payment-method-logo {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+}
+
+.payment-brand-khalti {
+  border-color: rgba(124, 58, 237, 0.35);
+  background: linear-gradient(135deg, rgba(245, 243, 255, 0.9), rgba(237, 233, 254, 0.9));
+}
+
+.payment-brand-khalti .payment-method-logo {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+}
+
+.payment-brand-mobile {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(219, 234, 254, 0.9));
+}
+
+.payment-brand-mobile .payment-method-logo {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.payment-brand-cash {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.9), rgba(254, 243, 199, 0.9));
+}
+
+.payment-brand-cash .payment-method-logo {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+[data-theme="dark"] .payment-brand-esewa,
+[data-theme="dark"] .payment-brand-khalti,
+[data-theme="dark"] .payment-brand-mobile,
+[data-theme="dark"] .payment-brand-cash {
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.payment-provider-ui {
+  border: 1px solid var(--light-tertiary);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.payment-provider-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.payment-provider-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.payment-provider-name {
+  margin: 0;
+  color: var(--dark-color);
+  font-weight: 700;
+}
+
+.payment-provider-note {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.payment-change-method {
+  border: 1px solid var(--light-tertiary);
+  background: var(--card-bg);
+  color: var(--dark-secondary);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.payment-provider-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.payment-provider-meta div {
+  border: 1px solid var(--light-tertiary);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="dark"] .payment-provider-meta div {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.payment-provider-meta span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  display: block;
+}
+
+.payment-provider-meta strong {
+  margin-top: 0.2rem;
+  color: var(--dark-secondary);
+  font-size: 0.84rem;
+  display: block;
+}
+
+.payment-auth-form {
+  margin-top: 1rem;
+  border-top: 1px dashed var(--light-tertiary);
+  padding-top: 0.9rem;
+}
+
+.payment-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.payment-form-field label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.payment-amount-field {
+  grid-column: span 2;
+}
+
+.payment-amount-input {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.payment-security-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.6rem;
+}
+
+.payment-form-error {
+  font-size: 0.78rem;
+  color: var(--danger-color);
+  margin-top: 0.35rem;
+  font-weight: 600;
 }
 
 .payment-success-modal {
   max-width: 620px;
+}
+
+.payment-success-auth .modal-body {
+  padding-top: 1.2rem;
 }
 
 .payment-success-banner {
@@ -2070,8 +2265,50 @@ input[type="file"]:focus {
   margin-bottom: 1rem;
   border: 1px solid transparent;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.payment-success-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.payment-success-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.payment-success-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.payment-success-state {
+  text-align: right;
+}
+
+.payment-success-check {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+  font-weight: 800;
+  margin-bottom: 0.35rem;
 }
 
 .payment-success-provider {
@@ -2082,16 +2319,8 @@ input[type="file"]:focus {
 
 .payment-success-subtitle {
   margin: 0.25rem 0 0;
-  font-size: 0.875rem;
+  font-size: 0.78rem;
   opacity: 0.9;
-}
-
-.payment-success-pill {
-  border-radius: 999px;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
 }
 
 .payment-success-esewa {
@@ -2100,9 +2329,8 @@ input[type="file"]:focus {
   color: #166534;
 }
 
-.payment-success-esewa .payment-success-pill {
-  background: #16a34a;
-  color: #ffffff;
+.payment-success-esewa .payment-success-logo {
+  background: linear-gradient(135deg, #16a34a, #15803d);
 }
 
 .payment-success-khalti {
@@ -2111,9 +2339,8 @@ input[type="file"]:focus {
   color: #5b21b6;
 }
 
-.payment-success-khalti .payment-success-pill {
-  background: #7c3aed;
-  color: #ffffff;
+.payment-success-khalti .payment-success-logo {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
 }
 
 .payment-success-mobile-banking {
@@ -2122,9 +2349,8 @@ input[type="file"]:focus {
   color: #1d4ed8;
 }
 
-.payment-success-mobile-banking .payment-success-pill {
-  background: #2563eb;
-  color: #ffffff;
+.payment-success-mobile-banking .payment-success-logo {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
 }
 
 .payment-success-card {
@@ -2152,6 +2378,13 @@ input[type="file"]:focus {
 .payment-success-row strong {
   color: var(--dark-secondary);
   font-size: 0.9rem;
+}
+
+.payment-success-note {
+  margin-top: 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
 }
 
 /* Footer */
@@ -2493,6 +2726,31 @@ input[type="file"]:focus {
 
   .payment-method-grid {
     grid-template-columns: 1fr;
+  }
+
+  .payment-provider-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .payment-provider-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-amount-field {
+    grid-column: auto;
+  }
+
+  .payment-success-banner {
+    flex-direction: column;
+  }
+
+  .payment-success-state {
+    text-align: left;
   }
 
   .site-footer-links,

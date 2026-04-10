@@ -7,6 +7,7 @@ import ToastProvider from "./components/Toast";
 import ConfirmDialogProvider from "./components/ConfirmDialog";
 import ThemeProvider from "./components/ThemeProvider";
 import { connectSocket, disconnectSocket } from "./utils/socket";
+import { getStoredToken } from "./utils/authStorage";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -21,7 +22,7 @@ import TermsOfService from "./pages/TermsOfService";
 function App() {
   useEffect(() => {
     const syncSocketAuth = () => {
-      const token = localStorage.getItem("token");
+      const token = getStoredToken();
       if (!token) {
         disconnectSocket();
         return;

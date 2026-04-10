@@ -69,23 +69,26 @@ function Register() {
 
       console.log("Registration response:", res.data);
 
-      // Handle new response format
-      const responseData = res.data.data || res.data;
-      
-      if (responseData.token) {
-        localStorage.setItem("token", responseData.token);
+      // Support both response formats:
+      // 1) { success, token, data: { id, name, email, role } }
+      // 2) { token, id, name, email, role }
+      const token = res.data?.token || res.data?.data?.token;
+      const userData = res.data?.data || res.data;
+
+      if (token) {
+        localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify({
-          id: responseData.id,
-          name: responseData.name,
-          email: responseData.email,
-          role: responseData.role
+          id: userData?.id,
+          name: userData?.name,
+          email: userData?.email,
+          role: userData?.role
         }));
         window.dispatchEvent(new Event("auth-changed"));
 
         addToast("Registration successful!", "success");
-        navigate("/dashboard");
+        navigate("/");
       } else {
-        setError("Registration failed: No token received");
+        setError(res.data?.message || "Registration failed: No token received");
       }
     } catch (err) {
       console.error("Registration error:", err.response || err);
