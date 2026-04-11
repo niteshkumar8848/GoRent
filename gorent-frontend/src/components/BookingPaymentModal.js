@@ -65,6 +65,7 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
   const [details, setDetails] = useState({
     mobileNumber: "",
     bankName: "",
+    accountHolderName: "",
     accountNumber: "",
     accountId: "",
     securePin: "",
@@ -90,6 +91,7 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
       ...prev,
       mobileNumber: "",
       bankName: "",
+      accountHolderName: "",
       accountNumber: "",
       accountId: "",
       securePin: "",
@@ -116,6 +118,11 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
       return;
     }
 
+    if (selectedOption.value !== "cash" && !details.accountHolderName.trim()) {
+      setFormError("Please enter account holder name.");
+      return;
+    }
+
     if (isMobileBanking) {
       if (!details.bankName.trim()) {
         setFormError("Please select your bank name.");
@@ -126,8 +133,8 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
         setFormError("Please enter a valid account number (8-20 digits).");
         return;
       }
-    } else if (!details.accountId.trim()) {
-      setFormError("Please enter account or wallet ID.");
+    } else if (selectedOption.value === "cash" && !details.accountId.trim()) {
+      setFormError("Please enter collector ID.");
       return;
     }
 
@@ -136,11 +143,16 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
       return;
     }
 
-    const resolvedAccountId = isMobileBanking ? details.accountNumber.trim() : details.accountId.trim();
+    const resolvedAccountId = isMobileBanking
+      ? details.accountNumber.trim()
+      : selectedOption.value === "cash"
+        ? details.accountId.trim()
+        : details.accountHolderName.trim();
 
     onPayNow({
       mobileNumber: normalizedMobile,
       bankName: details.bankName.trim(),
+      accountHolderName: details.accountHolderName.trim(),
       accountNumber: details.accountNumber.trim(),
       accountId: resolvedAccountId,
       securePin: details.securePin.trim(),
@@ -266,6 +278,20 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
                     </div>
                   )}
 
+                  {selectedOption.value === "mobile_banking" && (
+                    <div className="payment-form-field payment-field-full">
+                      <label>Account Holder Name</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Enter account holder full name"
+                        value={details.accountHolderName}
+                        onChange={(event) => handleInputChange("accountHolderName", event.target.value)}
+                        disabled={loading}
+                      />
+                    </div>
+                  )}
+
                   <div className="payment-form-field">
                     <label>Mobile Number</label>
                     <input
@@ -284,7 +310,7 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
                         ? "Collector ID"
                         : selectedOption.value === "mobile_banking"
                           ? "Account Number"
-                          : "Wallet / Account ID"}
+                          : "Account Holder Name"}
                     </label>
                     <input
                       type="text"
@@ -294,12 +320,22 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
                           ? "Receiver name or ID"
                           : selectedOption.value === "mobile_banking"
                             ? "Enter account number"
-                            : "Enter account ID"
+                            : "Enter account holder name"
                       }
-                      value={selectedOption.value === "mobile_banking" ? details.accountNumber : details.accountId}
+                      value={
+                        selectedOption.value === "mobile_banking"
+                          ? details.accountNumber
+                          : selectedOption.value === "cash"
+                            ? details.accountId
+                            : details.accountHolderName
+                      }
                       onChange={(event) =>
                         handleInputChange(
-                          selectedOption.value === "mobile_banking" ? "accountNumber" : "accountId",
+                          selectedOption.value === "mobile_banking"
+                            ? "accountNumber"
+                            : selectedOption.value === "cash"
+                              ? "accountId"
+                              : "accountHolderName",
                           event.target.value
                         )
                       }
