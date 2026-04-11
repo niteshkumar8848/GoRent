@@ -2213,6 +2213,33 @@ input[type="file"]:focus {
   padding-top: 0.9rem;
 }
 
+.payment-bank-section {
+  border: 1px solid var(--light-tertiary);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+  background: rgba(255, 255, 255, 0.42);
+  margin-bottom: 0.75rem;
+}
+
+[data-theme="dark"] .payment-bank-section {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.payment-bank-section-title {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--dark-secondary);
+}
+
+.payment-bank-section-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
 .payment-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2230,6 +2257,10 @@ input[type="file"]:focus {
 }
 
 .payment-amount-field {
+  grid-column: span 2;
+}
+
+.payment-field-full {
   grid-column: span 2;
 }
 
@@ -2742,6 +2773,10 @@ input[type="file"]:focus {
   }
 
   .payment-amount-field {
+    grid-column: auto;
+  }
+
+  .payment-field-full {
     grid-column: auto;
   }
 

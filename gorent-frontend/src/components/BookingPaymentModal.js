@@ -1,6 +1,29 @@
 import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 
+const NEPAL_BANK_OPTIONS = [
+  "Agricultural Development Bank",
+  "Citizens Bank International",
+  "Everest Bank",
+  "Global IME Bank",
+  "Himalayan Bank",
+  "Kumari Bank",
+  "Laxmi Sunrise Bank",
+  "Machhapuchchhre Bank",
+  "Nabil Bank",
+  "Nepal Bank Limited",
+  "Nepal Investment Mega Bank",
+  "Nepal SBI Bank",
+  "NMB Bank",
+  "NIC Asia Bank",
+  "Prabhu Bank",
+  "Prime Commercial Bank",
+  "Rastriya Banijya Bank",
+  "Sanima Bank",
+  "Siddhartha Bank",
+  "Standard Chartered Bank Nepal"
+];
+
 const PAYMENT_OPTIONS = [
   {
     value: "esewa",
@@ -21,6 +44,7 @@ const PAYMENT_OPTIONS = [
   {
     value: "mobile_banking",
     label: "Mobile Banking",
+    logoSrc: "/logos/mobile-banking.png",
     logo: "MB",
     accentClass: "payment-brand-mobile",
     subtitle: "Pay from your bank app"
@@ -40,6 +64,8 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
   const amountSymbol = selectedMethod === "cash" ? "रु" : "₹";
   const [details, setDetails] = useState({
     mobileNumber: "",
+    bankName: "",
+    accountNumber: "",
     accountId: "",
     securePin: "",
     transactionId: "",
@@ -63,6 +89,8 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
     setDetails((prev) => ({
       ...prev,
       mobileNumber: "",
+      bankName: "",
+      accountNumber: "",
       accountId: "",
       securePin: "",
       transactionId: "",
@@ -80,6 +108,7 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
 
   const handleConfirm = () => {
     if (!selectedOption) return;
+    const isMobileBanking = selectedOption.value === "mobile_banking";
 
     const normalizedMobile = details.mobileNumber.replace(/\s+/g, "");
     if (!/^\+?[0-9]{7,15}$/.test(normalizedMobile)) {
@@ -87,19 +116,33 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
       return;
     }
 
-    if (!details.accountId.trim()) {
+    if (isMobileBanking) {
+      if (!details.bankName.trim()) {
+        setFormError("Please select your bank name.");
+        return;
+      }
+
+      if (!/^[0-9]{8,20}$/.test(details.accountNumber.trim())) {
+        setFormError("Please enter a valid account number (8-20 digits).");
+        return;
+      }
+    } else if (!details.accountId.trim()) {
       setFormError("Please enter account or wallet ID.");
       return;
     }
 
-    if (!details.securePin.trim() || details.securePin.trim().length < 4) {
-      setFormError("Please enter a valid payment PIN/MPIN.");
+    if (!/^[0-9]{4,6}$/.test(details.securePin.trim())) {
+      setFormError(isMobileBanking ? "Please enter a valid Txn PIN (4-6 digits)." : "Please enter a valid payment PIN/MPIN.");
       return;
     }
 
+    const resolvedAccountId = isMobileBanking ? details.accountNumber.trim() : details.accountId.trim();
+
     onPayNow({
       mobileNumber: normalizedMobile,
-      accountId: details.accountId.trim(),
+      bankName: details.bankName.trim(),
+      accountNumber: details.accountNumber.trim(),
+      accountId: resolvedAccountId,
       securePin: details.securePin.trim(),
       transactionId: details.transactionId.trim(),
       amount: details.amount
@@ -195,7 +238,34 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
               </div>
 
               <div className="payment-auth-form">
+                {selectedOption.value === "mobile_banking" && (
+                  <div className="payment-bank-section">
+                    <p className="payment-bank-section-title">Banking Details</p>
+                    <p className="payment-bank-section-subtitle">
+                      Use your registered bank account details to verify this transfer.
+                    </p>
+                  </div>
+                )}
                 <div className="payment-form-grid">
+                  {selectedOption.value === "mobile_banking" && (
+                    <div className="payment-form-field payment-field-full">
+                      <label>Bank Name</label>
+                      <select
+                        className="form-input"
+                        value={details.bankName}
+                        onChange={(event) => handleInputChange("bankName", event.target.value)}
+                        disabled={loading}
+                      >
+                        <option value="">Select your bank</option>
+                        {NEPAL_BANK_OPTIONS.map((bank) => (
+                          <option key={bank} value={bank}>
+                            {bank}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="payment-form-field">
                     <label>Mobile Number</label>
                     <input
@@ -209,23 +279,46 @@ function BookingPaymentModal({ booking, selectedMethod, onMethodChange, onPayNow
                   </div>
 
                   <div className="payment-form-field">
-                    <label>{selectedOption.value === "cash" ? "Collector ID" : "Wallet / Account ID"}</label>
+                    <label>
+                      {selectedOption.value === "cash"
+                        ? "Collector ID"
+                        : selectedOption.value === "mobile_banking"
+                          ? "Account Number"
+                          : "Wallet / Account ID"}
+                    </label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder={selectedOption.value === "cash" ? "Receiver name or ID" : "Enter account ID"}
-                      value={details.accountId}
-                      onChange={(event) => handleInputChange("accountId", event.target.value)}
+                      placeholder={
+                        selectedOption.value === "cash"
+                          ? "Receiver name or ID"
+                          : selectedOption.value === "mobile_banking"
+                            ? "Enter account number"
+                            : "Enter account ID"
+                      }
+                      value={selectedOption.value === "mobile_banking" ? details.accountNumber : details.accountId}
+                      onChange={(event) =>
+                        handleInputChange(
+                          selectedOption.value === "mobile_banking" ? "accountNumber" : "accountId",
+                          event.target.value
+                        )
+                      }
                       disabled={loading}
                     />
                   </div>
 
                   <div className="payment-form-field">
-                    <label>{selectedOption.value === "cash" ? "Verification PIN" : "PIN / MPIN"}</label>
+                    <label>
+                      {selectedOption.value === "cash"
+                        ? "Verification PIN"
+                        : selectedOption.value === "mobile_banking"
+                          ? "Txn PIN"
+                          : "PIN / MPIN"}
+                    </label>
                     <input
                       type="password"
                       className="form-input"
-                      placeholder="Enter PIN"
+                      placeholder={selectedOption.value === "mobile_banking" ? "Enter Txn PIN" : "Enter PIN"}
                       value={details.securePin}
                       onChange={(event) => handleInputChange("securePin", event.target.value)}
                       disabled={loading}

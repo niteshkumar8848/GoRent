@@ -18,6 +18,7 @@ const PAYMENT_UI = {
   mobile_banking: {
     provider: "Mobile Banking",
     className: "payment-success-mobile-banking",
+    logoSrc: "/logos/mobile-banking.png",
     logo: "MB",
     helpText: "Bank transfer completed from mobile app"
   }
