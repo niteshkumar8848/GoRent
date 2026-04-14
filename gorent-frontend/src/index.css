@@ -377,6 +377,183 @@ body::before {
   font-size: 0.9375rem;
 }
 
+.notification-wrapper {
+  position: relative;
+}
+
+.notification-btn {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--light-tertiary);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--dark-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all var(--transition);
+}
+
+.notification-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+  filter: contrast(1.1) saturate(1.05);
+}
+
+.notification-btn:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.notification-btn.has-unread {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-primary);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  padding: 0 6px;
+  background: var(--danger-color);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--modal-bg);
+}
+
+[data-theme="dark"] .notification-btn {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(51, 65, 85, 0.95));
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+[data-theme="dark"] .notification-icon {
+  filter: brightness(1.15) contrast(1.25) saturate(1.05);
+}
+
+.notification-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: min(380px, calc(100vw - 2rem));
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: 0.75rem;
+  z-index: 120;
+}
+
+.notification-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.25rem 0.25rem 0.6rem;
+  border-bottom: 1px solid var(--light-tertiary);
+}
+
+.notification-panel-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--dark-color);
+}
+
+.notification-panel-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.notification-panel-actions button {
+  border: none;
+  background: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.notification-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.notification-item {
+  text-align: left;
+  border: 1px solid var(--light-tertiary);
+  border-left: 4px solid var(--info-color);
+  background: var(--input-bg);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.notification-item:hover {
+  transform: translateY(-1px);
+}
+
+.notification-item.unread {
+  border-color: rgba(99, 102, 241, 0.45);
+}
+
+.notification-item-success {
+  border-left-color: var(--success-color);
+}
+
+.notification-item-error {
+  border-left-color: var(--danger-color);
+}
+
+.notification-item-warning {
+  border-left-color: var(--warning-color);
+}
+
+.notification-item-info {
+  border-left-color: var(--info-color);
+}
+
+.notification-item-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--dark-secondary);
+}
+
+.notification-item-message {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--dark-color);
+  line-height: 1.35;
+}
+
+.notification-item-time {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.notification-empty {
+  margin: 0.75rem 0.25rem 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -1278,6 +1455,20 @@ body::before {
 
   .navbar-user .btn {
     width: 100%;
+  }
+
+  .notification-wrapper {
+    width: 100%;
+  }
+
+  .notification-btn {
+    width: 100%;
+  }
+
+  .notification-panel {
+    position: static;
+    width: 100%;
+    margin-top: 0.6rem;
   }
 
   .vehicle-grid {

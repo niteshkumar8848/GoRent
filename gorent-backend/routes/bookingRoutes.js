@@ -134,6 +134,115 @@ const checkDB = (req, res, next) => {
   next();
 };
 
+const findConflictingBooking = async (vehicleId, start, end) => Booking.findOne({
+  vehicle: vehicleId,
+  status: { $ne: "cancelled" },
+  startDate: { $lt: end },
+  endDate: { $gt: start }
+}).select("_id").lean();
+
+// Get unavailable booking ranges for a vehicle
+router.get("/availability/ranges", checkDB, async (req, res) => {
+  try {
+    const { vehicleId } = req.query;
+
+    if (!vehicleId) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide vehicleId"
+      });
+    }
+
+    if (!vehicleId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
+    }
+
+    const now = new Date();
+    const ranges = await Booking.find({
+      vehicle: vehicleId,
+      status: { $ne: "cancelled" },
+      endDate: { $gte: now }
+    })
+      .sort({ startDate: 1 })
+      .select("startDate endDate")
+      .lean();
+
+    return res.json({
+      success: true,
+      data: ranges.map((range) => ({
+        startDate: range.startDate,
+        endDate: range.endDate
+      }))
+    });
+  } catch (err) {
+    console.error("Fetch unavailable booking ranges error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching unavailable date ranges"
+    });
+  }
+});
+
+// Check availability for a vehicle within a date range
+router.get("/availability", checkDB, async (req, res) => {
+  try {
+    const { vehicleId, startDate, endDate } = req.query;
+
+    if (!vehicleId || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide vehicleId, startDate and endDate"
+      });
+    }
+
+    if (!vehicleId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID format"
+      });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
+    if (end <= start) {
+      return res.status(400).json({
+        success: false,
+        message: "End date must be after start date"
+      });
+    }
+
+    const conflictingBooking = await findConflictingBooking(vehicleId, start, end);
+    const isAvailable = !conflictingBooking;
+
+    return res.json({
+      success: true,
+      message: isAvailable
+        ? "Vehicle is available for the selected date"
+        : "Vehicle is not available on that date. Select another date.",
+      data: {
+        available: isAvailable
+      }
+    });
+  } catch (err) {
+    console.error("Check booking availability error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while checking vehicle availability"
+    });
+  }
+});
+
 // Create a new booking
 router.post("/", checkDB, auth, async (req, res) => {
   try {
@@ -209,6 +318,14 @@ router.post("/", checkDB, auth, async (req, res) => {
       return res.status(400).json({ 
         success: false,
         message: "End date must be after start date" 
+      });
+    }
+
+    const conflictingBooking = await findConflictingBooking(vehicleId, start, end);
+    if (conflictingBooking) {
+      return res.status(400).json({
+        success: false,
+        message: "Vehicle is not available on that date. Select another date."
       });
     }
 

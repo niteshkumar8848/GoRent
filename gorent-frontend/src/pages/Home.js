@@ -86,6 +86,10 @@ function Home() {
   const [endDate, setEndDate] = useState(new Date());
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [isVehicleAvailable, setIsVehicleAvailable] = useState(true);
+  const [availabilityMessage, setAvailabilityMessage] = useState("");
+  const [unavailableRanges, setUnavailableRanges] = useState([]);
   const [contactNumber, setContactNumber] = useState("");
   const [pickupLocation, setPickupLocation] = useState({
     address: "",
@@ -97,6 +101,17 @@ function Home() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const token = localStorage.getItem("token");
+  const VEHICLE_UNAVAILABLE_MESSAGE = "Vehicle is not available on that date. Select another date.";
+  const formatDateHint = (dateValue) => {
+    if (!dateValue) return "";
+    const parsedDate = new Date(dateValue);
+    if (isNaN(parsedDate.getTime())) return "";
+    return parsedDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  };
 
   const fetchVehicles = async (
     showLoading = true,
@@ -194,6 +209,85 @@ function Home() {
 
     autofillPickupFromCurrentLocation();
   }, [selectedVehicle, userLocation, pickupLocation]);
+
+  useEffect(() => {
+    if (!selectedVehicle?._id) {
+      setUnavailableRanges([]);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const fetchUnavailableRanges = async () => {
+      try {
+        const response = await api.get(`${API_URL}/bookings/availability/ranges`, {
+          params: { vehicleId: selectedVehicle._id }
+        });
+
+        if (isCancelled) return;
+        setUnavailableRanges(Array.isArray(response.data?.data) ? response.data.data : []);
+      } catch (err) {
+        if (isCancelled) return;
+        setUnavailableRanges([]);
+      }
+    };
+
+    fetchUnavailableRanges();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedVehicle?._id]);
+
+  useEffect(() => {
+    if (!selectedVehicle?._id) {
+      setIsVehicleAvailable(true);
+      setAvailabilityMessage("");
+      return;
+    }
+
+    const rentalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (rentalDays <= 0) {
+      setIsVehicleAvailable(true);
+      setAvailabilityMessage("");
+      return;
+    }
+
+    let isCancelled = false;
+
+    const checkVehicleAvailability = async () => {
+      try {
+        setAvailabilityLoading(true);
+        const response = await api.get(`${API_URL}/bookings/availability`, {
+          params: {
+            vehicleId: selectedVehicle._id,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString()
+          }
+        });
+
+        if (isCancelled) return;
+
+        const available = Boolean(response.data?.data?.available);
+        setIsVehicleAvailable(available);
+        setAvailabilityMessage(available ? "" : (response.data?.message || VEHICLE_UNAVAILABLE_MESSAGE));
+      } catch (err) {
+        if (isCancelled) return;
+        setIsVehicleAvailable(true);
+        setAvailabilityMessage("");
+      } finally {
+        if (!isCancelled) {
+          setAvailabilityLoading(false);
+        }
+      }
+    };
+
+    checkVehicleAvailability();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedVehicle?._id, startDate, endDate]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -303,6 +397,10 @@ function Home() {
 
     if (calculateDays() <= 0) {
       setBookingError("End date must be after start date");
+      return;
+    }
+
+    if (!isVehicleAvailable) {
       return;
     }
 
@@ -576,6 +674,9 @@ function Home() {
                 {bookingError && (
                   <div className="alert alert-error">{bookingError}</div>
                 )}
+                {!isVehicleAvailable && availabilityMessage && (
+                  <div className="alert alert-error">{availabilityMessage}</div>
+                )}
                 <div className="vehicle-detail-layout">
                   <div>
                     <img
@@ -617,6 +718,15 @@ function Home() {
                         className="form-input"
                         dateFormat="MMM dd, yyyy"
                       />
+                      {unavailableRanges.length > 0 && (
+                        <small className="form-hint" style={{ display: "block", marginTop: "0.5rem" }}>
+                          Selected Vehicle is not Available on :
+                          {" "}
+                          {unavailableRanges
+                            .map((range) => `${formatDateHint(range.startDate)} to ${formatDateHint(range.endDate)}`)
+                            .join(" || ")}
+                        </small>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -667,13 +777,15 @@ function Home() {
                 >
                   Cancel
                 </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleBooking}
-                  disabled={bookingLoading || calculateDays() <= 0}
-                >
-                  {bookingLoading ? "Booking..." : "Confirm Booking"}
-                </button>
+                {isVehicleAvailable && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleBooking}
+                    disabled={bookingLoading || availabilityLoading || calculateDays() <= 0}
+                  >
+                    {availabilityLoading ? "Checking Availability..." : (bookingLoading ? "Booking..." : "Confirm Booking")}
+                  </button>
+                )}
               </div>
             </div>
           </div>
