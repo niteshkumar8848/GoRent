@@ -16,6 +16,7 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
+const MONTH_OPTIONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Helper function to get full image URL
 const getImageUrl = (imagePath) => {
@@ -84,6 +85,9 @@ function AdminDashboard() {
   const [imagePreview, setImagePreview] = useState("");
   const [vehicleLoading, setVehicleLoading] = useState(false);
   const [mapPickerIndex, setMapPickerIndex] = useState(null);
+  const [vehicleAnalyticsScope, setVehicleAnalyticsScope] = useState("month");
+  const [vehicleAnalyticsMonth, setVehicleAnalyticsMonth] = useState(new Date().getMonth());
+  const [vehicleAnalyticsYear, setVehicleAnalyticsYear] = useState(new Date().getFullYear());
 
   const token = localStorage.getItem("token");
   const config = {
@@ -656,6 +660,30 @@ function AdminDashboard() {
   };
 
   const analytics = useMemo(() => {
+    const bookingDurationDays = (booking) => {
+      const start = booking?.startDate ? new Date(booking.startDate) : null;
+      const end = booking?.endDate ? new Date(booking.endDate) : null;
+      if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      return days > 0 ? days : 0;
+    };
+
+    const bookingDateCandidates = bookings
+      .map((booking) => {
+        const sourceDate = booking.createdAt || booking.startDate || booking.endDate;
+        const parsed = sourceDate ? new Date(sourceDate) : null;
+        return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      })
+      .filter(Boolean);
+
+    const availableAnalyticsYears = Array.from(
+      new Set(bookingDateCandidates.map((date) => date.getFullYear()))
+    ).sort((a, b) => b - a);
+
+    if (!availableAnalyticsYears.includes(new Date().getFullYear())) {
+      availableAnalyticsYears.unshift(new Date().getFullYear());
+    }
+
     const bookingStatusCounts = {
       pending: 0,
       confirmed: 0,
@@ -732,6 +760,54 @@ function AdminDashboard() {
       .sort((a, b) => b.averageRating - a.averageRating)
       .slice(0, 5);
 
+    const selectedYear = Number(vehicleAnalyticsYear);
+    const selectedMonth = Number(vehicleAnalyticsMonth);
+
+    const vehicleBookingMap = {};
+
+    bookings.forEach((booking) => {
+      if (booking.status === "cancelled") return;
+      const startDate = booking?.startDate ? new Date(booking.startDate) : null;
+      if (!startDate || Number.isNaN(startDate.getTime())) return;
+
+      const bookingYear = startDate.getFullYear();
+      const bookingMonth = startDate.getMonth();
+      const days = bookingDurationDays(booking);
+
+      const isInSelectedScope = vehicleAnalyticsScope === "year"
+        ? bookingYear === selectedYear
+        : (bookingYear === selectedYear && bookingMonth === selectedMonth);
+
+      if (!isInSelectedScope) return;
+
+      const fallbackVehicleId = booking?.vehicle?._id || booking?.vehicle || "unknown";
+      const vehicleId = String(fallbackVehicleId);
+      const matchedVehicle = vehicles.find((vehicle) => String(vehicle._id) === vehicleId);
+      const vehicleName = booking?.vehicle?.name
+        || matchedVehicle?.name
+        || `Vehicle ${vehicleId.slice(-6).toUpperCase()}`;
+
+      if (!vehicleBookingMap[vehicleId]) {
+        vehicleBookingMap[vehicleId] = {
+          vehicleId,
+          name: vehicleName,
+          bookingCount: 0,
+          totalDays: 0,
+          totalRevenue: 0
+        };
+      }
+
+      vehicleBookingMap[vehicleId].bookingCount += 1;
+      vehicleBookingMap[vehicleId].totalDays += days;
+      vehicleBookingMap[vehicleId].totalRevenue += Number(booking.totalPrice || 0);
+    });
+
+    const vehicleBookingUtilization = Object.values(vehicleBookingMap)
+      .sort((a, b) => {
+        if (b.bookingCount !== a.bookingCount) return b.bookingCount - a.bookingCount;
+        return b.totalDays - a.totalDays;
+      });
+
     return {
       bookingStatusCounts,
       paymentMethodCounts,
@@ -745,9 +821,19 @@ function AdminDashboard() {
       unavailableVehicles: vehicles.filter((vehicle) => !vehicle.available).length,
       monthlyRevenue: Array.from(monthlyRevenueMap.values()),
       vehicleCategoryCounts,
-      topRatedVehicles
+      topRatedVehicles,
+      availableAnalyticsYears,
+      vehicleBookingUtilization
     };
-  }, [bookings, users, vehicles, feedbackSummary]);
+  }, [
+    bookings,
+    users,
+    vehicles,
+    feedbackSummary,
+    vehicleAnalyticsMonth,
+    vehicleAnalyticsScope,
+    vehicleAnalyticsYear
+  ]);
 
   if (loading) {
     return (
@@ -1091,6 +1177,88 @@ function AdminDashboard() {
             </div>
 
             <div className="analytics-grid">
+              <div className="analytics-card analytics-card-full">
+                <div className="d-flex justify-between align-center gap-2" style={{ flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                  <h3 style={{ marginBottom: 0 }}>
+                    Vehicle Booking Graph (
+                    {vehicleAnalyticsScope === "month"
+                      ? `${MONTH_OPTIONS[vehicleAnalyticsMonth]} ${vehicleAnalyticsYear}`
+                      : vehicleAnalyticsYear}
+                    )
+                  </h3>
+                  <div className="d-flex gap-2" style={{ flexWrap: "wrap" }}>
+                    <select
+                      className="filter-select"
+                      style={{ minWidth: "150px" }}
+                      value={vehicleAnalyticsScope}
+                      onChange={(event) => setVehicleAnalyticsScope(event.target.value)}
+                    >
+                      <option value="month">Monthly View</option>
+                      <option value="year">Yearly View</option>
+                    </select>
+                    <select
+                      className="filter-select"
+                      style={{ minWidth: "150px" }}
+                      value={vehicleAnalyticsYear}
+                      onChange={(event) => setVehicleAnalyticsYear(Number(event.target.value))}
+                    >
+                      {analytics.availableAnalyticsYears.map((year) => (
+                        <option key={`analytics-year-${year}`} value={year}>{year}</option>
+                      ))}
+                    </select>
+                    {vehicleAnalyticsScope === "month" && (
+                      <select
+                        className="filter-select"
+                        style={{ minWidth: "150px" }}
+                        value={vehicleAnalyticsMonth}
+                        onChange={(event) => setVehicleAnalyticsMonth(Number(event.target.value))}
+                      >
+                        {MONTH_OPTIONS.map((monthLabel, monthIndex) => (
+                          <option key={`analytics-month-${monthLabel}`} value={monthIndex}>{monthLabel}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                <div className="analytics-dual-legend">
+                  <span><strong className="analytics-dual-dot analytics-dual-dot-primary" />Booked Times</span>
+                  <span><strong className="analytics-dual-dot analytics-dual-dot-secondary" />Booked Days</span>
+                </div>
+
+                {analytics.vehicleBookingUtilization.length > 0 ? (
+                  <div className="analytics-dual-bars">
+                    {(() => {
+                      const limitedRows = analytics.vehicleBookingUtilization.slice(0, 10);
+                      const maxCount = Math.max(...limitedRows.map((entry) => entry.bookingCount), 1);
+                      const maxDays = Math.max(...limitedRows.map((entry) => entry.totalDays), 1);
+
+                      return limitedRows.map((item) => (
+                        <div key={`vehicle-graph-${item.vehicleId}`} className="analytics-dual-row">
+                          <span className="analytics-label" title={item.name}>{item.name}</span>
+                          <div className="analytics-dual-metrics">
+                            <div className="analytics-dual-metric">
+                              <div className="analytics-bar-track">
+                                <div className="analytics-bar-fill" style={{ width: `${(item.bookingCount / maxCount) * 100}%` }} />
+                              </div>
+                              <span className="analytics-value">{item.bookingCount}x</span>
+                            </div>
+                            <div className="analytics-dual-metric">
+                              <div className="analytics-bar-track">
+                                <div className="analytics-bar-fill analytics-bar-secondary" style={{ width: `${(item.totalDays / maxDays) * 100}%` }} />
+                              </div>
+                              <span className="analytics-value">{item.totalDays}d</span>
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                ) : (
+                  <p className="text-muted">No vehicle booking data found for this period.</p>
+                )}
+              </div>
+
               <div className="analytics-card">
                 <h3>Bookings by Status</h3>
                 <div className="analytics-bars">

@@ -2758,10 +2758,63 @@ input[type="file"]:focus {
   box-shadow: var(--shadow-md);
 }
 
+.analytics-card-full {
+  grid-column: 1 / -1;
+}
+
 .analytics-card h3 {
   margin-bottom: 0.75rem;
   color: var(--dark-color);
   font-size: 1rem;
+}
+
+.analytics-dual-legend {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.analytics-dual-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 0.4rem;
+}
+
+.analytics-dual-dot-primary {
+  background: var(--primary-color);
+}
+
+.analytics-dual-dot-secondary {
+  background: var(--secondary-color);
+}
+
+.analytics-dual-bars {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.analytics-dual-row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.analytics-dual-metrics {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.analytics-dual-metric {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
 }
 
 .analytics-bars {
@@ -2993,6 +3046,10 @@ input[type="file"]:focus {
   }
 
   .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-dual-row {
     grid-template-columns: 1fr;
   }
 
