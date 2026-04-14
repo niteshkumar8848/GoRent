@@ -1177,88 +1177,6 @@ function AdminDashboard() {
             </div>
 
             <div className="analytics-grid">
-              <div className="analytics-card analytics-card-full">
-                <div className="d-flex justify-between align-center gap-2" style={{ flexWrap: "wrap", marginBottom: "0.75rem" }}>
-                  <h3 style={{ marginBottom: 0 }}>
-                    Vehicle Booking Graph (
-                    {vehicleAnalyticsScope === "month"
-                      ? `${MONTH_OPTIONS[vehicleAnalyticsMonth]} ${vehicleAnalyticsYear}`
-                      : vehicleAnalyticsYear}
-                    )
-                  </h3>
-                  <div className="d-flex gap-2" style={{ flexWrap: "wrap" }}>
-                    <select
-                      className="filter-select"
-                      style={{ minWidth: "150px" }}
-                      value={vehicleAnalyticsScope}
-                      onChange={(event) => setVehicleAnalyticsScope(event.target.value)}
-                    >
-                      <option value="month">Monthly View</option>
-                      <option value="year">Yearly View</option>
-                    </select>
-                    <select
-                      className="filter-select"
-                      style={{ minWidth: "150px" }}
-                      value={vehicleAnalyticsYear}
-                      onChange={(event) => setVehicleAnalyticsYear(Number(event.target.value))}
-                    >
-                      {analytics.availableAnalyticsYears.map((year) => (
-                        <option key={`analytics-year-${year}`} value={year}>{year}</option>
-                      ))}
-                    </select>
-                    {vehicleAnalyticsScope === "month" && (
-                      <select
-                        className="filter-select"
-                        style={{ minWidth: "150px" }}
-                        value={vehicleAnalyticsMonth}
-                        onChange={(event) => setVehicleAnalyticsMonth(Number(event.target.value))}
-                      >
-                        {MONTH_OPTIONS.map((monthLabel, monthIndex) => (
-                          <option key={`analytics-month-${monthLabel}`} value={monthIndex}>{monthLabel}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </div>
-
-                <div className="analytics-dual-legend">
-                  <span><strong className="analytics-dual-dot analytics-dual-dot-primary" />Booked Times</span>
-                  <span><strong className="analytics-dual-dot analytics-dual-dot-secondary" />Booked Days</span>
-                </div>
-
-                {analytics.vehicleBookingUtilization.length > 0 ? (
-                  <div className="analytics-dual-bars">
-                    {(() => {
-                      const limitedRows = analytics.vehicleBookingUtilization.slice(0, 10);
-                      const maxCount = Math.max(...limitedRows.map((entry) => entry.bookingCount), 1);
-                      const maxDays = Math.max(...limitedRows.map((entry) => entry.totalDays), 1);
-
-                      return limitedRows.map((item) => (
-                        <div key={`vehicle-graph-${item.vehicleId}`} className="analytics-dual-row">
-                          <span className="analytics-label" title={item.name}>{item.name}</span>
-                          <div className="analytics-dual-metrics">
-                            <div className="analytics-dual-metric">
-                              <div className="analytics-bar-track">
-                                <div className="analytics-bar-fill" style={{ width: `${(item.bookingCount / maxCount) * 100}%` }} />
-                              </div>
-                              <span className="analytics-value">{item.bookingCount}x</span>
-                            </div>
-                            <div className="analytics-dual-metric">
-                              <div className="analytics-bar-track">
-                                <div className="analytics-bar-fill analytics-bar-secondary" style={{ width: `${(item.totalDays / maxDays) * 100}%` }} />
-                              </div>
-                              <span className="analytics-value">{item.totalDays}d</span>
-                            </div>
-                          </div>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                ) : (
-                  <p className="text-muted">No vehicle booking data found for this period.</p>
-                )}
-              </div>
-
               <div className="analytics-card">
                 <h3>Bookings by Status</h3>
                 <div className="analytics-bars">
@@ -1374,6 +1292,88 @@ function AdminDashboard() {
                   </div>
                 ) : (
                   <p className="text-muted">No rating data yet.</p>
+                )}
+              </div>
+
+              <div className="analytics-card">
+                <div className="d-flex justify-between align-center gap-2" style={{ flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                  <h3 style={{ marginBottom: 0 }}>
+                    Vehicle Booking Graph (
+                    {vehicleAnalyticsScope === "month"
+                      ? `${MONTH_OPTIONS[vehicleAnalyticsMonth]} ${vehicleAnalyticsYear}`
+                      : vehicleAnalyticsYear}
+                    )
+                  </h3>
+                  <div className="d-flex gap-2" style={{ flexWrap: "wrap" }}>
+                    <select
+                      className="filter-select"
+                      style={{ minWidth: "150px" }}
+                      value={vehicleAnalyticsScope}
+                      onChange={(event) => setVehicleAnalyticsScope(event.target.value)}
+                    >
+                      <option value="month">Monthly View</option>
+                      <option value="year">Yearly View</option>
+                    </select>
+                    <select
+                      className="filter-select"
+                      style={{ minWidth: "150px" }}
+                      value={vehicleAnalyticsYear}
+                      onChange={(event) => setVehicleAnalyticsYear(Number(event.target.value))}
+                    >
+                      {analytics.availableAnalyticsYears.map((year) => (
+                        <option key={`analytics-year-${year}`} value={year}>{year}</option>
+                      ))}
+                    </select>
+                    {vehicleAnalyticsScope === "month" && (
+                      <select
+                        className="filter-select"
+                        style={{ minWidth: "150px" }}
+                        value={vehicleAnalyticsMonth}
+                        onChange={(event) => setVehicleAnalyticsMonth(Number(event.target.value))}
+                      >
+                        {MONTH_OPTIONS.map((monthLabel, monthIndex) => (
+                          <option key={`analytics-month-${monthLabel}`} value={monthIndex}>{monthLabel}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                <div className="analytics-dual-legend">
+                  <span><strong className="analytics-dual-dot analytics-dual-dot-primary" />Booked Times</span>
+                  <span><strong className="analytics-dual-dot analytics-dual-dot-secondary" />Booked Days</span>
+                </div>
+
+                {analytics.vehicleBookingUtilization.length > 0 ? (
+                  <div className="analytics-dual-bars">
+                    {(() => {
+                      const limitedRows = analytics.vehicleBookingUtilization.slice(0, 5);
+                      const maxCount = Math.max(...limitedRows.map((entry) => entry.bookingCount), 1);
+                      const maxDays = Math.max(...limitedRows.map((entry) => entry.totalDays), 1);
+
+                      return limitedRows.map((item) => (
+                        <div key={`vehicle-graph-${item.vehicleId}`} className="analytics-dual-row">
+                          <span className="analytics-label" title={item.name}>{item.name}</span>
+                          <div className="analytics-dual-metrics">
+                            <div className="analytics-dual-metric">
+                              <div className="analytics-bar-track">
+                                <div className="analytics-bar-fill" style={{ width: `${(item.bookingCount / maxCount) * 100}%` }} />
+                              </div>
+                              <span className="analytics-value">{item.bookingCount}x</span>
+                            </div>
+                            <div className="analytics-dual-metric">
+                              <div className="analytics-bar-track">
+                                <div className="analytics-bar-fill analytics-bar-secondary" style={{ width: `${(item.totalDays / maxDays) * 100}%` }} />
+                              </div>
+                              <span className="analytics-value">{item.totalDays}d</span>
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                ) : (
+                  <p className="text-muted">No vehicle booking data found for this period.</p>
                 )}
               </div>
             </div>
