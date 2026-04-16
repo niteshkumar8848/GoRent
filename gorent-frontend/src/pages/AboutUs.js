@@ -102,12 +102,15 @@ function AboutUs() {
 
         /* DARK */
         .dark {
-          background: #000;
-          color: #fff;
+          // background: #797979;
+          // background: linear-gradient(135deg, #797979 0%, #000 100%);
+          background:linear-gradient( rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5) ), url('https://images.unsplash.com/photo-1603584173870-7f23fdae1b7a?q=80&w=869&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+          background-size: cover;
+          background-position: center;
+          background-filter: brightness(0.1);
+          color: #e8e8e8;
           text-align: center;
         }
-
-        .dark p { color: #ccc; }
 
         /* STEPS */
         .steps {
@@ -124,7 +127,7 @@ function AboutUs() {
         }
 
         .steps div:hover {
-          background: #000;
+          background: #757575;
           color: #fff;
         }
 
@@ -136,10 +139,16 @@ function AboutUs() {
 
         .cta button {
           padding: 12px 30px;
-          background: #000;
-          color: #fff;
+          background: #000000;
+          color: #ffffff;
           border-radius: 30px;
           border: none;
+        }
+        .cta button:hover {
+          background: #2853ff;
+          color: #ffffff;
+          cursor: pointer;
+          animation: infinite pulse 1.5s;
         }
 
         /* FOOTER */
@@ -193,8 +202,8 @@ function AboutUs() {
 
       {/* DARK */}
       <section className="section dark">
-        <h2>Safety first</h2>
-        <p>All vehicles are verified for reliability.</p>
+        <h2>Safety First</h2>
+        <p style={{ color: 'whitesmoke' }}>All vehicles are verified for reliability.</p>
       </section>
 
       {/* HOW */}
@@ -211,7 +220,7 @@ function AboutUs() {
       {/* CTA */}
       <section className="cta">
         <h2>Start your journey</h2>
-        <a href="/"><button>Get Started</button></a>
+        <a href="/"><button>Get Started → </button></a>
       </section>
 
       {/* FOOTER */}
